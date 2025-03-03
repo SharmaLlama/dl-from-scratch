@@ -1,12 +1,13 @@
 import pickle
-from utils import _replace_encodings, _encode_utf8, _get_bigrams, _sum_bigrams
+from BPE.utils import _replace_encodings, _encode_utf8, _get_bigrams, _sum_bigrams
 
 class BPEEncoder:
-    def __init__(self, train_set = None, vocab=None):
+    def __init__(self, train_set = None, vocab=None, special_tokens=None):
         ## train set should be 2D list where each list is a sentence
         self.train_set = train_set
         self.vocab = vocab
         assert (self.vocab or self.train_set), "Both train set and vocab is None"
+        self.special_tokens = special_tokens
     
     def train(self, max_vocab_size = 100):
         if self.train_set:
@@ -53,9 +54,10 @@ class BPEEncoder:
 
 
 class BPEDecoder:
-    def __init__(self, vocab):
+    def __init__(self, vocab, special_tokens=None):
         self.vocab = vocab
         self.vocab_reverse = {v:k for k,v in self.vocab.items()}
+        self.special_tokens = special_tokens if special_tokens else {}
 
     def decode(self, text):
         if isinstance(text, str):
@@ -63,18 +65,31 @@ class BPEDecoder:
         
         def __one_decode(sentence):
             original_text = []
+            special_token_seen = True
             while True:
                 non_seen = True
                 for byte in sentence:
-                    if byte in self.vocab_reverse:
+                    if byte in self.special_tokens:
+                        original_text.append(self.special_tokens[byte])
+                        special_token_seen = True
+                    elif byte in self.vocab_reverse:
                         original_text.append(self.vocab_reverse[byte][0])
                         original_text.append(self.vocab_reverse[byte][1])
                         non_seen = False
                     else: 
                         original_text += [byte]
                 if non_seen:
-
-                    return bytes(original_text).decode("utf-8", errors="replace")
+                    if special_token_seen:
+                        result_decoded = ""
+                        for a in original_text:
+                            if isinstance(a, str):
+                                result_decoded += a
+                            else:
+                                decoded = bytes([a]).decode("utf-8", errors="replace")
+                                result_decoded += decoded
+                        return result_decoded
+                    else:
+                        return bytes(original_text).decode("utf-8", errors="replace")
                 else: 
                     sentence = original_text
                     original_text = []

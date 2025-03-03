@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from Encoder import Encoder
-from Decoder import Decoder
-from PE import PositionalEmbedding
-from UtilsLayers import *
+from TransformerComponents.Encoder import Encoder
+from TransformerComponents.Decoder import Decoder
+from TransformerComponents.PE import PositionalEmbedding
+from TransformerComponents.UtilsLayers import *
 
 class Transformer(nn.Module):
     def __init__(self, encoder: Encoder, decoder: Decoder, src_embedding: PositionalEmbedding, tgt_embedding: PositionalEmbedding, projection: Projection):
@@ -28,8 +28,8 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
     
-    def forward(self, x, encoder_mask=None, decoder_mask=None):
-        x_encoder = self.encode(x, encoder_mask)
-        x_decoder = self.decode(x, x_encoder, encoder_mask, decoder_mask)
+    def forward(self, src, tgt, encoder_mask=None, decoder_mask=None):
+        x_encoder = self.encode(src, encoder_mask)
+        x_decoder = self.decode(tgt, x_encoder, encoder_mask, decoder_mask)
         x = self.proj(x_decoder)
         return x

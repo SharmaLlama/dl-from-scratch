@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from AttentionHead import MultiHeadAttention
-from UtilsLayers import PositionWiseFFN, ResidualConnection
+from TransformerComponents.AttentionHead import MultiHeadAttention
+from TransformerComponents.UtilsLayers import PositionWiseFFN, ResidualConnection
 
 class EncoderBlock(nn.Module):
     def __init__(self, n_heads, d_model, dk, dv, d_ff):
