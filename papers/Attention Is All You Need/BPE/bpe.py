@@ -60,7 +60,7 @@ class BPEDecoder:
         self.special_tokens = special_tokens if special_tokens else {}
 
     def decode(self, text):
-        if isinstance(text, str):
+        if not isinstance(text[0], list):
             text = [text]
         
         def __one_decode(sentence):
