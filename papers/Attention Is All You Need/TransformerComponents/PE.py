@@ -14,4 +14,4 @@ class PositionalEmbedding(nn.Module):
 
         # self.register_buffer("positional_encoding", self.positional_encoding)
     def forward(self, x): # input size is batch x seq_length x d_model
-        return self.normal_embedding(x) + self.positional_encoding
+        return self.normal_embedding(x) + self.positional_encoding.to(x.device)
