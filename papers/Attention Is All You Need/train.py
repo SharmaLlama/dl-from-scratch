@@ -161,7 +161,7 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
     losses = []
     test_losses = []
     sentences = {}
-    for epoch in range(1, config['NUM_EPOCHS']+ 1):
+    for epoch in range(1, config['NUM_EPOCHS'] + 1):
         model.train()
         batch_train = iter(train_dataloader)
         batch_loss = 0
@@ -221,20 +221,20 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
         test_losses.append(val_loss / len(batch_test))
 
         if epoch % 100 == 0:
-            model_filename = f"dl-from-scratch/papers/Attention Is All You Need/Models/model_{epoch}"
+            model_filename = f"/srv/scratch/z3547870/Models/Model_{epoch}"
             torch.save({
                 'epoch' : epoch,
                 "model_state_dict" : model.state_dict(),
                 "optimiser_state_dict" : optimiser.state_dict(),
                 }, model_filename)
-    
-    with open("dl-from-scratch/papers/Attention Is All You Need/train_loss.pkl", "wb") as f:
+    name = "no_drop_no_warm"
+    with open(f"/srv/scratch/z3547870/experiments/{name}_train_loss.pkl", "wb") as f:
         pickle.dump(losses, f)    
         
-    with open("dl-from-scratch/papers/Attention Is All You Need/test_loss.pkl", "wb") as f:
+    with open(f"/srv/scratch/z3547870/experiments/{name}_test_loss.pkl", "wb") as f:
         pickle.dump(test_losses, f)    
     
-    with open("dl-from-scratch/papers/Attention Is All You Need/sentences.pkl", "wb") as f:
+    with open(f"/srv/scratch/z3547870/experiments/{name}_sentences.pkl", "wb") as f:
         pickle.dump(sentences, f)    
 
 if __name__ == "__main__":
