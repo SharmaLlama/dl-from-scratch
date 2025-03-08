@@ -149,6 +149,7 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, device, bpe_decoder, warmup_steps):
+    exp_name = "drop_warm"
     num_examples = 10
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
@@ -221,20 +222,30 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
         test_losses.append(val_loss / len(batch_test))
 
         if epoch % 100 == 0:
-            model_filename = f"/srv/scratch/z3547870/Models/Model_{epoch}"
+            base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
+            model_dir = base_model_dir
+            if os.path.exists(base_model_dir):
+                counter = 1 
+                while os.path.exists(model_dir):
+                    model_dir = f"{base_model_dir}_{counter}"
+                    counter += 1
+
+            os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
+
+            model_filename = f"{model_dir}/Model_{epoch}"
             torch.save({
-                'epoch' : epoch,
-                "model_state_dict" : model.state_dict(),
-                "optimiser_state_dict" : optimiser.state_dict(),
+                'epoch': epoch,
+                "model_state_dict": model.state_dict(),
+                "optimiser_state_dict": optimiser.state_dict(),
                 }, model_filename)
-    name = "no_drop_no_warm"
-    with open(f"/srv/scratch/z3547870/experiments/{name}_train_loss.pkl", "wb") as f:
+    
+    with open(f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.pkl", "wb") as f:
         pickle.dump(losses, f)    
         
-    with open(f"/srv/scratch/z3547870/experiments/{name}_test_loss.pkl", "wb") as f:
+    with open(f"/srv/scratch/z3547870/experiments/{exp_name}_test_loss.pkl", "wb") as f:
         pickle.dump(test_losses, f)    
     
-    with open(f"/srv/scratch/z3547870/experiments/{name}_sentences.pkl", "wb") as f:
+    with open(f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.pkl", "wb") as f:
         pickle.dump(sentences, f)    
 
 if __name__ == "__main__":
