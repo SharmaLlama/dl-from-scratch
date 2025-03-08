@@ -7,6 +7,7 @@ import pandas as pd
 from pathlib import Path
 import argparse
 import yaml
+import os
 
 from BPE.bpe import BPEEncoder, BPEDecoder
 from TransformerComponents.Encoder import Encoder
