@@ -2,12 +2,9 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset, random_split
 import torch.nn.functional as F
-import sys
-import os
 import pickle
 import pandas as pd
 from pathlib import Path
-from tqdm import tqdm
 import argparse
 import yaml
 
@@ -17,6 +14,7 @@ from TransformerComponents.Decoder import Decoder
 from TransformerComponents.PE import PositionalEmbedding
 from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
+from TransformerComponents.Optimiser import WarmupAdamOpt
 
 YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
 with open(YAML_PATH, "r") as file:
@@ -112,10 +110,10 @@ def get_dataloaders(vocab, english_encoded, german_encoded):
 
 def build_model(vocab, device):
     vocab_size = len(vocab) + 256 + 3 # 3 special tokens
-    encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'])
-    decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'])
-    src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'])
-    tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'])
+    encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
+    decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
+    src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
+    tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
     model.initialise()
@@ -150,9 +148,13 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
     return decoder_input
 
 
-def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, device, bpe_decoder):
+def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, device, bpe_decoder, warmup_steps):
     num_examples = 10
-    optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
+    if warmup_steps != 0:
+        optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
+    else:
+        optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
+    
     loss_fn = torch.nn.NLLLoss(ignore_index=max_vocab_size + 3).to(device)
     global_step_train = 0
     global_step_test = 0
@@ -174,7 +176,11 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
             loss = loss_fn(logits.view(-1, vocab_size), target_indices.view(-1))
             batch_loss += loss.item()
             
-            optimiser.zero_grad()
+            if warmup_steps != 0:
+                optimiser.optimiser.zero_grad()
+            else:
+                optimiser.zero_grad()
+            
             loss.backward()
             optimiser.step()
             global_step_train += 1
@@ -186,7 +192,7 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
         val_loss = 0
         batch_test = iter(test_dataloader)
         sample_taken = False
-        for _, data in enumerate(batch_test):
+        for data in batch_test:
             with torch.no_grad():
                 target_indices = data['output'].to(device)
                 if not sample_taken and epoch % 100 == 0:
@@ -236,11 +242,12 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--vocab_path", type=str, required=True)
     parser.add_argument("--vocab_file", type=str, required=True)
+    parser.add_argument("--warmup", type=int, required=False, default=500)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
     english_encoded, german_encoded, vocab = get_encodings(args.dataset, args.vocab_path, args.vocab_file)
     bpe_decoder = get_decoder(vocab)
     train_dataloader, test_dataloader = get_dataloaders(vocab, english_encoded, german_encoded)
     model = build_model(vocab, device)
-    vocab_size = len(vocab) + 256 + 3 
-    train(model, max(vocab.values()), vocab_size, train_dataloader, test_dataloader, device, bpe_decoder)
+    vocab_size = len(vocab) + 256 + 3 # Length of merges dictionary, + 256 base utf + 3 special tokens
+    train(model, max(vocab.values()), vocab_size, train_dataloader, test_dataloader, device, bpe_decoder, args.warmup)

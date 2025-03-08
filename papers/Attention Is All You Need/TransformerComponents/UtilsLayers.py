@@ -17,12 +17,13 @@ class LayerNormalisation(nn.Module):
 
 
 class ResidualConnection(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout):
         super().__init__()
         self.norm = LayerNormalisation()
+        self.dropout = nn.Dropout(dropout)
     
     def forward(self, x, sublayer):
-        return x + sublayer(self.norm(x))
+        return x + self.dropout(sublayer(self.norm(x)))
     
 class PositionWiseFFN(torch.nn.Module):
     def __init__(self, d_model, d_ff):
