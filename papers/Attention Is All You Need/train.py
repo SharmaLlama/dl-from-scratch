@@ -6,8 +6,6 @@ import sys
 import os
 import pickle
 import pandas as pd
-parent_dir = os.path.abspath("./papers/Attention Is All You Need/")
-sys.path.append(parent_dir)
 from pathlib import Path
 from tqdm import tqdm
 import argparse
@@ -20,7 +18,7 @@ from TransformerComponents.PE import PositionalEmbedding
 from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
 
-YAML_PATH = "./papers/Attention Is All You Need/config.yaml"
+YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -72,18 +70,29 @@ class LanguageTranslationDataset(Dataset):
 
 def get_encodings(datapath, vocab_path, vocab_file):
     dataset = pd.read_csv(datapath)
-    with open(Path(vocab_path) / vocab_file, "rb") as f:
+    vocab_file_path = Path(vocab_path) / vocab_file
+    english_encoded_path = Path(vocab_path) / "english_encoded"
+    german_encoded_path = Path(vocab_path) / "german_encoded"
+    with open(vocab_file_path, "rb") as f:
         vocab = pickle.load(f)
 
     bpe_encoder = BPEEncoder(vocab=vocab)
-    english_encoded = bpe_encoder.encode(dataset.iloc[:, 1])
-    german_encoded = bpe_encoder.encode(dataset.iloc[:, 0])
-    with open(Path(vocab_path) / "english_encoded", "wb") as f:
-        pickle.dump(english_encoded, f)
-    
-    with open(Path(vocab_path) / "german_encoded", "wb") as f:
-        pickle.dump(german_encoded, f)
-    
+    # Check if encoded files exist
+    if english_encoded_path.exists() and german_encoded_path.exists():
+        with open(english_encoded_path, "rb") as f:
+            english_encoded = pickle.load(f)
+        with open(german_encoded_path, "rb") as f:
+            german_encoded = pickle.load(f)
+    else:
+        english_encoded = bpe_encoder.encode(dataset.iloc[:, 1])
+        german_encoded = bpe_encoder.encode(dataset.iloc[:, 0])
+
+        # Save encoded data
+        with open(english_encoded_path, "wb") as f:
+            pickle.dump(english_encoded, f)
+        with open(german_encoded_path, "wb") as f:
+            pickle.dump(german_encoded, f)
+
     return english_encoded, german_encoded, vocab
 
 def get_decoder(vocab):
@@ -124,9 +133,10 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
     finished = torch.zeros(B, dtype=torch.bool, device=device)
 
     for t in range(max_len - 1):
-        subsequent_mask = torch.tril(torch.ones((max_len, max_len), dtype=torch.int)).expand(B, -1, -1) # shape: (B, max_len, max_len)
+        subsequent_mask = torch.tril(torch.ones((max_len, max_len), dtype=torch.int)).expand(B, -1, -1).to(device) # shape: (B, max_len, max_len)
         other_mask =(decoder_input != pad_token).int().unsqueeze(1) # (B, 1, max_len)
-        out = model.decode(decoder_input, encoder_output, encoder_mask, (subsequent_mask & other_mask).unsqueeze(1).to(device))
+        decoder_mask = (subsequent_mask & other_mask).unsqueeze(1).to(device)
+        out = model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask)
         prediction = model.proj(out) # Expected shape: (B, max_len, vocab_size)
         next_tokens = torch.argmax(prediction[:, t, :], dim=-1) # shape: (B, )
         next_tokens = torch.where(finished, pad_token, next_tokens)
@@ -149,9 +159,9 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
     losses = []
     test_losses = []
     sentences = {}
-    for epoch in range(1, config['NUM_EPOCHS'] + 1):
+    for epoch in range(1, config['NUM_EPOCHS']+ 1):
         model.train()
-        batch_train = tqdm(train_dataloader, desc=f"Training epoch: {epoch:02d}")
+        batch_train = iter(train_dataloader)
         batch_loss = 0
         for data in batch_train:
             target_indices = data['output'].to(device) # B x seq_len
@@ -162,7 +172,6 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
             decoder_mask = data['decoder_mask'].to(device) # B x 1 x seq_len x seq_len
             logits = model(encoder_input,  tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask)
             loss = loss_fn(logits.view(-1, vocab_size), target_indices.view(-1))
-            batch_train.set_postfix({"loss": f"{loss.item(): 6.3f}"})
             batch_loss += loss.item()
             
             optimiser.zero_grad()
@@ -175,7 +184,7 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
 
         model.eval()
         val_loss = 0
-        batch_test = tqdm(test_dataloader, desc=f"Test epoch: {epoch:02d}")
+        batch_test = iter(test_dataloader)
         sample_taken = False
         for _, data in enumerate(batch_test):
             with torch.no_grad():
@@ -206,20 +215,20 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
         test_losses.append(val_loss / len(batch_test))
 
         if epoch % 100 == 0:
-            model_filename = f"Models/model_{epoch}"
+            model_filename = f"dl-from-scratch/papers/Attention Is All You Need/Models/model_{epoch}"
             torch.save({
                 'epoch' : epoch,
                 "model_state_dict" : model.state_dict(),
                 "optimiser_state_dict" : optimiser.state_dict(),
                 }, model_filename)
     
-    with open("train_loss.pkl", "wb") as f:
+    with open("dl-from-scratch/papers/Attention Is All You Need/train_loss.pkl", "wb") as f:
         pickle.dump(losses, f)    
         
-    with open("test_loss.pkl", "wb") as f:
+    with open("dl-from-scratch/papers/Attention Is All You Need/test_loss.pkl", "wb") as f:
         pickle.dump(test_losses, f)    
     
-    with open("sentences.pkl", "wb") as f:
+    with open("dl-from-scratch/papers/Attention Is All You Need/sentences.pkl", "wb") as f:
         pickle.dump(sentences, f)    
 
 if __name__ == "__main__":
