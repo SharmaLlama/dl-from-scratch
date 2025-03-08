@@ -150,19 +150,29 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, device, bpe_decoder, warmup_steps):
-    exp_name = "drop_warm"
+    exp_name = "drop_warm_smoothen"
     num_examples = 10
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
     
-    loss_fn = torch.nn.NLLLoss(ignore_index=max_vocab_size + 3).to(device)
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=max_vocab_size + 3, label_smoothing=0.1).to(device)
     global_step_train = 0
     global_step_test = 0
     losses = []
     test_losses = []
     sentences = {}
+    base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
+    model_dir = base_model_dir
+    if os.path.exists(base_model_dir):
+        counter = 1 
+        while os.path.exists(model_dir):
+            model_dir = f"{base_model_dir}_{counter}"
+            counter += 1
+
+    os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
+    
     for epoch in range(1, config['NUM_EPOCHS'] + 1):
         model.train()
         batch_train = iter(train_dataloader)
@@ -223,16 +233,6 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
         test_losses.append(val_loss / len(batch_test))
 
         if epoch % 100 == 0:
-            base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
-            model_dir = base_model_dir
-            if os.path.exists(base_model_dir):
-                counter = 1 
-                while os.path.exists(model_dir):
-                    model_dir = f"{base_model_dir}_{counter}"
-                    counter += 1
-
-            os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
-
             model_filename = f"{model_dir}/Model_{epoch}"
             torch.save({
                 'epoch': epoch,
