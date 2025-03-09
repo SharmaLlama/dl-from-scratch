@@ -146,7 +146,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
 
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
     
-    for epoch in tqdm(range(1, config['NUM_EPOCHS'] + 1)):
+    for epoch in range(1, config['NUM_EPOCHS'] + 1):
         model.train()
         batch_train = iter(train_dataloader)
         batch_loss = 0
@@ -219,3 +219,15 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
     
     with open(f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.pkl", "wb") as f:
         pickle.dump(sentences, f)    
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Transformer Training")
+    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--model_file", type=str, required=True)
+    parser.add_argument("--warmup", type=int, required=False, default=500)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    args = parser.parse_args()
+    english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
+    train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded)
+    model = build_model(sp, device)
+    train(model,sp, train_dataloader, test_dataloader, device, args.warmup)
