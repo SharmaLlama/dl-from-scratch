@@ -179,17 +179,15 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
         for data in batch_test:
             with torch.no_grad():
                 target_indices = data['output'].to(device)
+                encoder_input = data['src'].to(device)
                 if not sample_taken and epoch % 100 == 0:
                     pred = model_prediction(model, data, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
                     ints = torch.randint(low=0, high=pred.size(0), size=(num_examples,))
                     pred = pred[ints, :]
-                    decoded = [sp.decode(pred.detach().cpu().tolist())]
-                    actual_decoded = [sp.decode(target_indices[ints, :].detach().cpu().tolist())]
-                    
-                    comparison_text = []
-                    for j in range(len(decoded)):
-                        comparison_text.append([decoded[j], actual_decoded[j]])
-
+                    decoded = sp.decode(pred.detach().cpu().tolist())
+                    actual_decoded = sp.decode(target_indices[ints, :].detach().cpu().tolist())
+                    source_sentence = sp.decode(encoder_input[ints, :].detach().cpu().to_list())
+                    comparison_text = list(zip(source_sentence, actual_decoded, decoded))
                     sentences[epoch] = comparison_text
                     sample_taken = True
 
