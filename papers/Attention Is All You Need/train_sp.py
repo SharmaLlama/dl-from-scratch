@@ -39,33 +39,42 @@ class LanguageTranslationDataset(Dataset):
 
 
     def __getitem__(self, idx):
-        src_seq, tgt_seq, output_seq = self.paired_encodings[idx]
-        src_tensor = torch.tensor(src_seq, dtype=torch.long)
-        tgt_tensor = torch.tensor(tgt_seq, dtype=torch.long)
-        output_tensor = torch.tensor(output_seq, dtype=torch.long)
+            src_seq, tgt_seq, output_seq = self.paired_encodings[idx]
+            
+            # Convert to tensors
+            src_tensor = torch.tensor(src_seq, dtype=torch.long)
+            tgt_tensor = torch.tensor(tgt_seq, dtype=torch.long)
+            output_tensor = torch.tensor(output_seq, dtype=torch.long)
 
-        src_tensor = F.pad(src_tensor, (0, self.seq_len - src_tensor.size(0)), value=self.pad_token)
-        tgt_tensor = F.pad(tgt_tensor, (0, self.seq_len - tgt_tensor.size(0)), value=self.pad_token)
-        output_tensor = F.pad(output_tensor, (0, self.seq_len - output_tensor.size(0)), value=self.pad_token)
-        encoder_mask = (src_tensor != self.pad_token).int()
+            # **Ensure the sequence length does not exceed `seq_len`**
+            if src_tensor.size(0) > self.seq_len:
+                src_tensor = src_tensor[:self.seq_len]  # Crop excess tokens
+            if tgt_tensor.size(0) > self.seq_len:
+                tgt_tensor = tgt_tensor[:self.seq_len]  # Crop excess tokens
+            if output_tensor.size(0) > self.seq_len:
+                output_tensor = output_tensor[:self.seq_len]  # Crop excess tokens
 
-        subsequent_mask = torch.tril(torch.ones((self.seq_len, self.seq_len), dtype=torch.int))
-        padding_mask = (tgt_tensor != self.pad_token).int()
-        decoder_mask = subsequent_mask & padding_mask.unsqueeze(0)
+            # **Pad sequences to `seq_len` if they are shorter**
+            src_tensor = F.pad(src_tensor, (0, max(0, self.seq_len - src_tensor.size(0))), value=self.pad_token)
+            tgt_tensor = F.pad(tgt_tensor, (0, max(0, self.seq_len - tgt_tensor.size(0))), value=self.pad_token)
+            output_tensor = F.pad(output_tensor, (0, max(0, self.seq_len - output_tensor.size(0))), value=self.pad_token)
+            encoder_mask = (src_tensor != self.pad_token).int()
+            subsequent_mask = torch.tril(torch.ones((self.seq_len, self.seq_len), dtype=torch.int))
+            padding_mask = (tgt_tensor != self.pad_token).int()
+            decoder_mask = subsequent_mask & padding_mask.unsqueeze(0)
 
-        
 
-        return {
-            "src": src_tensor, # Seq_len
-            "tgt": tgt_tensor, # seq_len
-            "output": output_tensor, # seq_len
-            "encoder_mask" : encoder_mask.unsqueeze(0).unsqueeze(0), # 1 x 1 x seq_len
-            "decoder_mask" : decoder_mask.unsqueeze(0), # 1 x seq_len x seq_len
-        }
 
+            return {
+                "src": src_tensor, # Seq_len
+                "tgt": tgt_tensor, # seq_len
+                "output": output_tensor, # seq_len
+                "encoder_mask" : encoder_mask.unsqueeze(0).unsqueeze(0), # 1 x 1 x seq_len
+                "decoder_mask" : decoder_mask.unsqueeze(0), # 1 x seq_len x seq_len
+            }
     def __len__(self): 
-        return len(self.paired_encodings)
-    
+            return len(self.paired_encodings)
+        
 
 def get_encodings(datapath, model_file):
     english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None)
