@@ -8,8 +8,8 @@ from pathlib import Path
 import argparse
 import yaml
 import os
+import sentencepiece as spm
 
-from BPE.bpe import BPEEncoder, BPEDecoder
 from TransformerComponents.Encoder import Encoder
 from TransformerComponents.Decoder import Decoder
 from TransformerComponents.PE import PositionalEmbedding
@@ -17,7 +17,7 @@ from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
 from TransformerComponents.Optimiser import WarmupAdamOpt
 
-YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
+YAML_PATH = "../papers/Attention Is All You Need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -30,10 +30,10 @@ class LanguageTranslationDataset(Dataset):
 
     @staticmethod
     def augment_encodings(src_encodings, tgt_encodings, sos_token, eos_token):
-        src_encodings = [[sos_token] + sublist + [eos_token] for sublist in src_encodings]
-        tgt_encodings = [[sos_token] + sublist for sublist in tgt_encodings]
+        src_encodings_app = [[sos_token] + sublist + [eos_token] for sublist in src_encodings]
+        tgt_encodings_app = [[sos_token] + sublist for sublist in tgt_encodings]
         output_encodings = [sublist + [eos_token] for sublist in tgt_encodings] 
-        full_encoding = list(zip(src_encodings, tgt_encodings, output_encodings))
+        full_encoding = list(zip(src_encodings_app, tgt_encodings_app, output_encodings))
         full_encoding.sort(key=lambda x: len(x[0])) # sort sequence lengths
         return full_encoding
 
@@ -67,50 +67,25 @@ class LanguageTranslationDataset(Dataset):
         return len(self.paired_encodings)
     
 
-def get_encodings(datapath, vocab_path, vocab_file):
-    dataset = pd.read_csv(datapath)
-    vocab_file_path = Path(vocab_path) / vocab_file
-    english_encoded_path = Path(vocab_path) / "english_encoded"
-    german_encoded_path = Path(vocab_path) / "german_encoded"
-    with open(vocab_file_path, "rb") as f:
-        vocab = pickle.load(f)
+def get_encodings(datapath, model_file):
+    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None)
+    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None)
+    sp = spm.SentencePieceProcessor(model_file=model_file)
+    english_encoded = sp.encode_as_ids(english_sentences.iloc[:, 0].to_list())
+    hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[:, 0].to_list())
+    return english_encoded, hindi_encoded, sp
 
-    bpe_encoder = BPEEncoder(vocab=vocab)
-    # Check if encoded files exist
-    if english_encoded_path.exists() and german_encoded_path.exists():
-        with open(english_encoded_path, "rb") as f:
-            english_encoded = pickle.load(f)
-        with open(german_encoded_path, "rb") as f:
-            german_encoded = pickle.load(f)
-    else:
-        english_encoded = bpe_encoder.encode(dataset.iloc[:, 1])
-        german_encoded = bpe_encoder.encode(dataset.iloc[:, 0])
 
-        # Save encoded data
-        with open(english_encoded_path, "wb") as f:
-            pickle.dump(english_encoded, f)
-        with open(german_encoded_path, "wb") as f:
-            pickle.dump(german_encoded, f)
-
-    return english_encoded, german_encoded, vocab
-
-def get_decoder(vocab):
-    max_vocab_size = max(vocab.values())
-    special_tokens = {max_vocab_size + 1 : "<SOS>",  max_vocab_size + 2 : "<EOS>", max_vocab_size + 3 : "<pad>"}
-    bpe_decoder = BPEDecoder(vocab=vocab, special_tokens=special_tokens)
-    return bpe_decoder
-
-def get_dataloaders(vocab, english_encoded, german_encoded):
-    max_vocab_size = max(vocab.values())
-    full_data = LanguageTranslationDataset(seq_length=config['SEQ_LEN'], src_encodings=english_encoded, tgt_encodings=german_encoded, sos_token=max_vocab_size + 1, eos_token=max_vocab_size + 2,
-                                        pad_token=max_vocab_size + 3)
+def get_dataloaders(sp, english_encoded, tgt_encoded):
+    full_data = LanguageTranslationDataset(seq_length=config['SEQ_LEN'], src_encodings=english_encoded, tgt_encodings=tgt_encoded, sos_token=sp.bos_id(), eos_token=sp.eos_id(),
+                                        pad_token=sp.pad_id())
     train_data, test_data = random_split(full_data, [config['TRAIN_RATIO'], 1-config['TRAIN_RATIO']])
     train_dataloader = DataLoader(train_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True)
     test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True)
     return train_dataloader, test_dataloader
 
-def build_model(vocab, device):
-    vocab_size = len(vocab) + 256 + 3 # 3 special tokens
+def build_model(sp, device):
+    vocab_size = sp.vocab_size()
     encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
     decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
     src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
@@ -149,17 +124,15 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
     return decoder_input
 
 
-def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, device, bpe_decoder, warmup_steps):
-    exp_name = "drop_warm_smoothen"
+def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
+    exp_name = "hindi_drop_warm_smoothen"
     num_examples = 10
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
     
-    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=max_vocab_size + 3, label_smoothing=0.1).to(device)
-    global_step_train = 0
-    global_step_test = 0
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=sp.pad_id(), label_smoothing=0.1).to(device)
     losses = []
     test_losses = []
     sentences = {}
@@ -173,7 +146,7 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
 
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
     
-    for epoch in range(1, config['NUM_EPOCHS'] + 1):
+    for epoch in tqdm(range(1, config['NUM_EPOCHS'] + 1)):
         model.train()
         batch_train = iter(train_dataloader)
         batch_loss = 0
@@ -185,7 +158,7 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
             encoder_mask = data['encoder_mask'].to(device) # B x 1 x 1 x seq_len
             decoder_mask = data['decoder_mask'].to(device) # B x 1 x seq_len x seq_len
             logits = model(encoder_input,  tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask)
-            loss = loss_fn(logits.view(-1, vocab_size), target_indices.view(-1))
+            loss = loss_fn(logits.view(-1, sp.vocab_size()), target_indices.view(-1))
             batch_loss += loss.item()
             
             if warmup_steps != 0:
@@ -195,7 +168,6 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
             
             loss.backward()
             optimiser.step()
-            global_step_train += 1
 
         losses.append(batch_loss / len(batch_train))
 
@@ -208,18 +180,17 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
             with torch.no_grad():
                 target_indices = data['output'].to(device)
                 if not sample_taken and epoch % 100 == 0:
-                    pred = model_prediction(model, data, config['SEQ_LEN'], device, max_vocab_size + 1, max_vocab_size + 2, max_vocab_size + 3)
+                    pred = model_prediction(model, data, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
                     ints = torch.randint(low=0, high=pred.size(0), size=(num_examples,))
                     pred = pred[ints, :]
-                    decoded = [decoded.replace("<pad>", "") for decoded in bpe_decoder.decode(pred.detach().cpu().tolist())]
-                    actual_decoded = [decoded.replace("<pad>", "") for decoded in bpe_decoder.decode(target_indices[ints, :].detach().cpu().tolist())]
+                    decoded = [sp.decode(pred.detach().cpu().tolist())]
+                    actual_decoded = [sp.decode(target_indices[ints, :].detach().cpu().tolist())]
                     
                     comparison_text = []
                     for j in range(len(decoded)):
                         comparison_text.append([decoded[j], actual_decoded[j]])
 
                     sentences[epoch] = comparison_text
-                    global_step_test += 1
                     sample_taken = True
 
                 encoder_input = data['src'].to(device) # B x seq_len
@@ -227,7 +198,7 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
                 encoder_mask = data['encoder_mask'].to(device) # B x 1 x 1 x seq_len
                 decoder_mask = data['decoder_mask'].to(device) # B x 1 x seq_len x seq_len
                 logits = model(encoder_input,  tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask)
-                loss = loss_fn(logits.view(-1, vocab_size), target_indices.view(-1))
+                loss = loss_fn(logits.view(-1, sp.vocab_size()), target_indices.view(-1))
                 val_loss += loss.item()
 
         test_losses.append(val_loss / len(batch_test))
@@ -248,21 +219,3 @@ def train(model, max_vocab_size, vocab_size, train_dataloader, test_dataloader, 
     
     with open(f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.pkl", "wb") as f:
         pickle.dump(sentences, f)    
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Transformer Training")
-    parser.add_argument("--dataset", type=str, required=True)
-    parser.add_argument("--vocab_path", type=str, required=True)
-    parser.add_argument("--vocab_file", type=str, required=True)
-    parser.add_argument("--warmup", type=int, required=False, default=500)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    args = parser.parse_args()
-    english_encoded, german_encoded, vocab = get_encodings(args.dataset, args.vocab_path, args.vocab_file)
-    bpe_decoder = get_decoder(vocab)
-    train_dataloader, test_dataloader = get_dataloaders(vocab, english_encoded, german_encoded)
-    model = build_model(vocab, device)
-    if torch.cuda.device_count() > 1:
-        pass
-    
-    vocab_size = len(vocab) + 256 + 3 # Length of merges dictionary, + 256 base utf + 3 special tokens
-    train(model, max(vocab.values()), vocab_size, train_dataloader, test_dataloader, device, bpe_decoder, args.warmup)

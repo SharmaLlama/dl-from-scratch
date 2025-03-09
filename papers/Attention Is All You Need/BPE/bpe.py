@@ -14,7 +14,8 @@ class BPEEncoder:
             self.encoded_train_set = _encode_utf8(self.train_set)
             merges = {}
             curr_max = 256 if not self.vocab else max(self.vocab) + 1
-            while curr_max - 255 <= max_vocab_size:
+            while curr_max - 256 <= max_vocab_size:
+                print(curr_max)
                 stats = _sum_bigrams(self.encoded_train_set)
                 if not stats:
                     break

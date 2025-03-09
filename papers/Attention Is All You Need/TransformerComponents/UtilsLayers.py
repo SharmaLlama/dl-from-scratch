@@ -41,4 +41,4 @@ class Projection(nn.Module):
         self.linear = nn.Linear(d_model, vocab_size)
 
     def forward(self, x):
-        return F.log_softmax(self.linear(x), dim=-1)
+        return self.linear(x)
