@@ -5,7 +5,7 @@ class WarmupAdamOpt:
         self.warmup = warmup
         self.model_size = model_size
         self._rate = 0
-    
+        self.not_printed = True
     def state_dict(self):
         return {key: value for key, value in self.__dict__.items() if key != 'optimiser'}
     
@@ -23,5 +23,9 @@ class WarmupAdamOpt:
     def rate(self, step = None):
         if step is None:
             step = self._step
+        if step ** (-0.5) < step * self.warmup ** (-1.5) and self.not_printed:
+            print("warm up done")
+            self.not_printed = False
+
         return (self.model_size ** (-0.5) *
             min(step ** (-0.5), step * self.warmup ** (-1.5))) 

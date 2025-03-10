@@ -17,7 +17,7 @@ from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
 from TransformerComponents.Optimiser import WarmupAdamOpt
 
-YAML_PATH = "../papers/Attention Is All You Need/config.yaml"
+YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -77,8 +77,8 @@ class LanguageTranslationDataset(Dataset):
         
 
 def get_encodings(datapath, model_file):
-    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None)
-    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None)
+    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, nrows=125_000)
+    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, nrows=125_000)
     sp = spm.SentencePieceProcessor(model_file=model_file)
     english_encoded = sp.encode_as_ids(english_sentences.iloc[:, 0].to_list())
     hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[:, 0].to_list())
@@ -134,7 +134,7 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
-    exp_name = "hindi_drop_warm_smoothen"
+    exp_name = "hindi_drop_warm_smoothen_small"
     num_examples = 10
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
@@ -154,6 +154,14 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
             counter += 1
 
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
+    print("training batch length:", len(train_dataloader))
+    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.txt"
+    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_test_loss.txt"
+    sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.txt"
+
+    for log_file in [train_log_file, test_log_file, sentences_log_file]:
+        with open(log_file, "w") as f:
+            pass  
     
     for epoch in range(1, config['NUM_EPOCHS'] + 1):
         model.train()
@@ -189,13 +197,13 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
             with torch.no_grad():
                 target_indices = data['output'].to(device)
                 encoder_input = data['src'].to(device)
-                if not sample_taken and epoch % 100 == 0:
+                if not sample_taken and epoch % 50 == 0:
                     pred = model_prediction(model, data, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
                     ints = torch.randint(low=0, high=pred.size(0), size=(num_examples,))
                     pred = pred[ints, :]
                     decoded = sp.decode(pred.detach().cpu().tolist())
                     actual_decoded = sp.decode(target_indices[ints, :].detach().cpu().tolist())
-                    source_sentence = sp.decode(encoder_input[ints, :].detach().cpu().to_list())
+                    source_sentence = sp.decode(encoder_input[ints, :].detach().cpu().tolist())
                     comparison_text = list(zip(source_sentence, actual_decoded, decoded))
                     sentences[epoch] = comparison_text
                     sample_taken = True
@@ -210,22 +218,38 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
 
         test_losses.append(val_loss / len(batch_test))
 
-        if epoch % 100 == 0:
+        if epoch % 50 == 0:
             model_filename = f"{model_dir}/Model_{epoch}"
             torch.save({
                 'epoch': epoch,
                 "model_state_dict": model.state_dict(),
                 "optimiser_state_dict": optimiser.state_dict(),
                 }, model_filename)
-    
-    with open(f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.pkl", "wb") as f:
-        pickle.dump(losses, f)    
+
+        if epoch % 10 == 0:
+            with open(train_log_file, "a") as f:
+                for elem in losses:
+                    f.write(f"{elem}\n")
+
+            with open(test_log_file, "a") as f:
+                for elem in test_losses:
+                    f.write(f"{elem}\n")
+
+            with open(sentences_log_file, "a") as f:
+                for elem in sentences.values():
+                    f.write(f"{elem}\n")
+
+            test_losses = []
+            losses = []
+            sentences = {}
+    #with open(f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.pkl", "wb") as f:
+     #   pickle.dump(losses, f)    
         
-    with open(f"/srv/scratch/z3547870/experiments/{exp_name}_test_loss.pkl", "wb") as f:
-        pickle.dump(test_losses, f)    
+   # with open(f"/srv/scratch/z3547870/experiments/{exp_name}_test_loss.pkl", "wb") as f:
+    #    pickle.dump(test_losses, f)    
     
-    with open(f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.pkl", "wb") as f:
-        pickle.dump(sentences, f)    
+   # with open(f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.pkl", "wb") as f:
+    #    pickle.dump(sentences, f)    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Transformer Training")
