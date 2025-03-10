@@ -93,7 +93,7 @@ def get_dataloaders(sp, english_encoded, tgt_encoded):
     test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True)
     return train_dataloader, test_dataloader
 
-def build_model(sp, device):
+def build_model(sp, device, state_dict=None):
     vocab_size = sp.vocab_size()
     encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
     decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
@@ -101,7 +101,11 @@ def build_model(sp, device):
     tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
-    model.initialise()
+    if state_dict is not None:
+        model.load_state_dict(state_dict)
+    else:
+        model.initialise()
+
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
 
@@ -137,11 +141,13 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
     return decoder_input
 
 
-def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
-    exp_name = "multi_hindi_drop_warm_smoothen_small"
+def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, optimser_state=None):
+    exp_name = "multi_hindi_drop_warm_smoothen_small_2_continued"
     num_examples = 10
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
+        if optimser_state is not None:
+            optimiser.load_state_dict(optimser_state)
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
     
@@ -179,10 +185,12 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
             tgt_input = data['tgt'].to(device) # B x seq_len
             encoder_mask = data['encoder_mask'].to(device) # B x 1 x 1 x seq_len
             decoder_mask = data['decoder_mask'].to(device) # B x 1 x seq_len x seq_len
-            logits = model(encoder_input,  tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask)
+            logits = model(encoder_input,  tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask) # B x seq_len x vocab_size
             loss = loss_fn(logits.view(-1, sp.vocab_size()), target_indices.view(-1))
             batch_loss += loss.item()
-            
+            predictions = torch.argmax(logits, dim=-1)
+
+
             if warmup_steps != 0:
                 optimiser.optimiser.zero_grad()
             else:
@@ -261,9 +269,14 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--model_file", type=str, required=True)
     parser.add_argument("--warmup", type=int, required=False, default=500)
+    parser.add_argument("--llm_model_file", type=str, required=False, default="")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
+    if args.llm_model_file != "":
+        checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
+    else:
+        checkpoint = {'model_state_dict' : None, 'optimiser_state_dict' : None}
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded)
-    model = build_model(sp, device)
-    train(model,sp, train_dataloader, test_dataloader, device, args.warmup)
+    model = build_model(sp, device, checkpoint['model_state_dict'])
+    train(model,sp, train_dataloader, test_dataloader, device, args.warmup, checkpoint['optimiser_state_dict'])
