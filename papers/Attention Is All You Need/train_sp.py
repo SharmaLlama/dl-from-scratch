@@ -77,8 +77,8 @@ class LanguageTranslationDataset(Dataset):
         
 
 def get_encodings(datapath, model_file):
-    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, nrows=125_000)
-    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, nrows=125_000)
+    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, nrows=550_000)
+    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, nrows=550_000)
     sp = spm.SentencePieceProcessor(model_file=model_file)
     english_encoded = sp.encode_as_ids(english_sentences.iloc[:, 0].to_list())
     hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[:, 0].to_list())
@@ -102,39 +102,43 @@ def build_model(sp, device):
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
     model.initialise()
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
 
     return model
 
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
-    encoder_input = batch['src'].to(device) # B x seq_len
-    encoder_mask = batch['encoder_mask'].to(device) # B  x 1 x 1 x seq_len
-    encoder_output = model.encode(encoder_input, encoder_mask)
+    # If the model is wrapped in DataParallel, use model.module
+    underlying_model = model.module if hasattr(model, 'module') else model
+
+    encoder_input = batch['src'].to(device)  # B x seq_len
+    encoder_mask = batch['encoder_mask'].to(device)  # B x 1 x 1 x seq_len
+    encoder_output = underlying_model.encode(encoder_input, encoder_mask)
+
     B = encoder_input.size(0)
     decoder_input = torch.full((B, max_len), pad_token).to(device)
-    decoder_input[: , 0] = sos_token
+    decoder_input[:, 0] = sos_token
     finished = torch.zeros(B, dtype=torch.bool, device=device)
 
     for t in range(max_len - 1):
-        subsequent_mask = torch.tril(torch.ones((max_len, max_len), dtype=torch.int)).expand(B, -1, -1).to(device) # shape: (B, max_len, max_len)
-        other_mask =(decoder_input != pad_token).int().unsqueeze(1) # (B, 1, max_len)
+        subsequent_mask = torch.tril(torch.ones((max_len, max_len), dtype=torch.int)).expand(B, -1, -1).to(device)
+        other_mask = (decoder_input != pad_token).int().unsqueeze(1)
         decoder_mask = (subsequent_mask & other_mask).unsqueeze(1).to(device)
-        out = model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask)
-        prediction = model.proj(out) # Expected shape: (B, max_len, vocab_size)
-        next_tokens = torch.argmax(prediction[:, t, :], dim=-1) # shape: (B, )
+        out = underlying_model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask)
+        prediction = underlying_model.proj(out)  # shape: (B, max_len, vocab_size)
+        next_tokens = torch.argmax(prediction[:, t, :], dim=-1)
         next_tokens = torch.where(finished, pad_token, next_tokens)
-
         decoder_input[:, t + 1] = next_tokens
         finished |= (next_tokens == eos_token)
-
         if finished.all():
-          break
+            break
 
     return decoder_input
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
-    exp_name = "hindi_drop_warm_smoothen_small"
+    exp_name = "multi_hindi_drop_warm_smoothen_small"
     num_examples = 10
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
@@ -145,6 +149,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
     losses = []
     test_losses = []
     sentences = {}
+    counter = 0
     base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
     model_dir = base_model_dir
     if os.path.exists(base_model_dir):
@@ -155,9 +160,9 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
 
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
     print("training batch length:", len(train_dataloader))
-    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.txt"
-    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_test_loss.txt"
-    sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.txt"
+    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_{counter}_train_loss.txt"
+    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_{counter}_test_loss.txt"
+    sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_{counter}_sentences.txt"
 
     for log_file in [train_log_file, test_log_file, sentences_log_file]:
         with open(log_file, "w") as f:
@@ -197,7 +202,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps):
             with torch.no_grad():
                 target_indices = data['output'].to(device)
                 encoder_input = data['src'].to(device)
-                if not sample_taken and epoch % 50 == 0:
+                if not sample_taken and epoch % 10 == 0:
                     pred = model_prediction(model, data, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
                     ints = torch.randint(low=0, high=pred.size(0), size=(num_examples,))
                     pred = pred[ints, :]
