@@ -208,3 +208,23 @@ DROPOUT: 0.1
   - **Warmup:** 2000 steps
   - **ngpus:** 4
   - **Total Samples:** 550K
+
+## multi_hindi_metrics
+Maybe batch loss wasn't correctly being calculated, I was doing the mean and then averaging the mean of per batch, I've changed it to sum and and average per token.
+
+D_MODEL: 256
+N_HEADS: 4
+N_ENCODERS: 2 # 6
+N_DECODERS: 2 # 6
+FF_HIDDEN: 2048
+DROPOUT: 0.1
+SEQ_LEN: 140
+BATCH_SIZE: 1024
+TRAIN_RATIO: 0.8
+NUM_EPOCHS: 400
+LR: 0.00005
+DROPOUT: 0.1
+- **Other Configs:**
+  - **Warmup:** 2000 steps
+  - **ngpus:** 4
+  - **Total Samples:** 550K

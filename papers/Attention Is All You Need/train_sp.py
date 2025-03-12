@@ -17,7 +17,11 @@ from TransformerComponents.PE import PositionalEmbedding
 from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
 from TransformerComponents.Optimiser import WarmupAdamOpt
-
+import random
+seed = 42
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
 YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
