@@ -7,11 +7,15 @@ class WarmupAdamOpt:
         self._rate = 0
         self.not_printed = True
     def state_dict(self):
-        return {key: value for key, value in self.__dict__.items() if key != 'optimiser'}
+        return {
+                "warmup_opt" : {key: value for key, value in self.__dict__.items() if key != 'optimiser'},
+                "optimiser" : self.optimiser.state_dict()
+                }
     
     def load_state_dict(self, state_dict):
-        self.__dict__.update(state_dict) 
-        
+        self.__dict__.update(state_dict['warmup_opt']) 
+        self.optimiser.load_state_dict(state_dict['optimiser'])
+
     def step(self):
         self._step += 1
         rate = self.rate()

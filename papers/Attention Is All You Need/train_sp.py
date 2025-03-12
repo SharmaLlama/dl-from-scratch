@@ -101,13 +101,15 @@ def build_model(sp, device, state_dict=None):
     tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
+    model.initialise()
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+    
     if state_dict is not None:
         model.load_state_dict(state_dict)
     else:
-        model.initialise()
+        pass
 
-    if torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model)
 
     return model
 
@@ -142,8 +144,8 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, optimser_state=None):
-    exp_name = "multi_hindi_drop_warm_smoothen_small_2_continued"
-    num_examples = 10
+    exp_name = "multi_hindi_small"
+    num_examples = 25
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
         if optimser_state is not None:
@@ -155,6 +157,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
     losses = []
     test_losses = []
     sentences = {}
+    accuracies = []
     counter = 0
     base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
     model_dir = base_model_dir
@@ -178,6 +181,8 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
         model.train()
         batch_train = iter(train_dataloader)
         batch_loss = 0
+        batch_summation = 0
+        batch_correct = 0
         for data in batch_train:
             target_indices = data['output'].to(device) # B x seq_len
 
@@ -189,7 +194,9 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
             loss = loss_fn(logits.view(-1, sp.vocab_size()), target_indices.view(-1))
             batch_loss += loss.item()
             predictions = torch.argmax(logits, dim=-1)
-
+            correct = (predictions == target_indices).float()
+            batch_correct += (correct * encoder_mask.squeeze(2).squeeze(1)).sum().item()
+            batch_summation += encoder_mask.sum().item()
 
             if warmup_steps != 0:
                 optimiser.optimiser.zero_grad()
@@ -200,7 +207,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
             optimiser.step()
 
         losses.append(batch_loss / len(batch_train))
-
+        accuracies.append(batch_correct / batch_summation * 100)
 
         model.eval()
         val_loss = 0
@@ -231,7 +238,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
 
         test_losses.append(val_loss / len(batch_test))
 
-        if epoch % 50 == 0:
+        if epoch % 25 == 0:
             model_filename = f"{model_dir}/Model_{epoch}"
             torch.save({
                 'epoch': epoch,
@@ -241,7 +248,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
 
         if epoch % 10 == 0:
             with open(train_log_file, "a") as f:
-                for elem in losses:
+                for elem in list(zip(losses, accuracies)):
                     f.write(f"{elem}\n")
 
             with open(test_log_file, "a") as f:
@@ -255,6 +262,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
             test_losses = []
             losses = []
             sentences = {}
+            accuracies = []
     #with open(f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.pkl", "wb") as f:
      #   pickle.dump(losses, f)    
         
