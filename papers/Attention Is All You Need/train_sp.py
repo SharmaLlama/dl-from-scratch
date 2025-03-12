@@ -106,16 +106,16 @@ def build_model(sp, device, state_dict=None):
     tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
-    model.initialise()
+    
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
     
     if state_dict is not None:
         model.load_state_dict(state_dict)
-    else:
-        pass
-
-
+    elif torch.cuda.device_count() > 1:
+        model.module.initialise()
+    else: 
+        model.initialise() 
     return model
 
 
@@ -159,8 +159,6 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
     
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=sp.pad_id(), label_smoothing=0.1, reduction='sum').to(device)
-    losses = []
-    test_losses = []
     sentences = {}
     train_metrics = []
     test_metrics = []
