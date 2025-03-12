@@ -149,11 +149,12 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, optimser_state=None):
-    exp_name = "multi_hindi_small"
+    exp_name = "multi_hindi_metrics"
     num_examples = 25
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
         if optimser_state is not None:
+            print("state dict optimiser")
             optimiser.load_state_dict(optimser_state)
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
@@ -174,9 +175,10 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
 
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
     print("training batch length:", len(train_dataloader))
-    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_{counter}_train_loss.txt"
-    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_{counter}_test_loss.txt"
-    sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}_{counter}_sentences.txt"
+    count_str = f"_{counter - 1}" if counter != 0 else ""
+    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}(count_str}_train_loss.txt"
+    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_test_loss.txt"
+    sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_sentences.txt"
 
     for log_file in [train_log_file, test_log_file, sentences_log_file]:
         with open(log_file, "w") as f:
