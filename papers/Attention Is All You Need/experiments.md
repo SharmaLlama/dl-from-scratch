@@ -171,7 +171,7 @@ Investigate if increasing the sequence length and training set size while mainta
 
 ### multi_hindi_drop_warm_smoothen_small_2
 
-
+(this is with _3 in the .txt file but the Model is _2.)
 D_MODEL: 256
 N_HEADS: 4
 N_ENCODERS: 2 # 6
@@ -187,4 +187,24 @@ DROPOUT: 0.1
 - **Other Configs:**
   - **Warmup:** 2000 steps
   - **ngpus:** 8
+  - **Total Samples:** 550K
+
+## multi_hindi_small
+Testing to see if the optimiser works with the new state dicts. I was not updating the Adam optimiser momentum params when I was re-initialising to re-train the model. 
+
+D_MODEL: 256
+N_HEADS: 4
+N_ENCODERS: 2 # 6
+N_DECODERS: 2 # 6
+FF_HIDDEN: 2048
+DROPOUT: 0.1
+SEQ_LEN: 140
+BATCH_SIZE: 1024
+TRAIN_RATIO: 0.8
+NUM_EPOCHS: 400
+LR: 0.00005
+DROPOUT: 0.1
+- **Other Configs:**
+  - **Warmup:** 2000 steps
+  - **ngpus:** 4
   - **Total Samples:** 550K

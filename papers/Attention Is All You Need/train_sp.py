@@ -9,6 +9,7 @@ import argparse
 import yaml
 import os
 import sentencepiece as spm
+import numpy as np
 
 from TransformerComponents.Encoder import Encoder
 from TransformerComponents.Decoder import Decoder
@@ -153,11 +154,13 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
     
-    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=sp.pad_id(), label_smoothing=0.1).to(device)
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=sp.pad_id(), label_smoothing=0.1, reduction='sum').to(device)
     losses = []
     test_losses = []
     sentences = {}
-    accuracies = []
+    train_metrics = []
+    test_metrics = []
+
     counter = 0
     base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
     model_dir = base_model_dir
@@ -181,11 +184,10 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
         model.train()
         batch_train = iter(train_dataloader)
         batch_loss = 0
-        batch_summation = 0
+        total_tokens = 0
         batch_correct = 0
         for data in batch_train:
             target_indices = data['output'].to(device) # B x seq_len
-
             encoder_input = data['src'].to(device) # B x seq_len
             tgt_input = data['tgt'].to(device) # B x seq_len
             encoder_mask = data['encoder_mask'].to(device) # B x 1 x 1 x seq_len
@@ -196,7 +198,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
             predictions = torch.argmax(logits, dim=-1)
             correct = (predictions == target_indices).float()
             batch_correct += (correct * encoder_mask.squeeze(2).squeeze(1)).sum().item()
-            batch_summation += encoder_mask.sum().item()
+            total_tokens += encoder_mask.sum().item()
 
             if warmup_steps != 0:
                 optimiser.optimiser.zero_grad()
@@ -206,11 +208,13 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
             loss.backward()
             optimiser.step()
 
-        losses.append(batch_loss / len(batch_train))
-        accuracies.append(batch_correct / batch_summation * 100)
+        train_metrics.append((batch_loss / total_tokens, np.exp(batch_loss / total_tokens), 
+                              batch_correct / total_tokens * 100))
 
         model.eval()
         val_loss = 0
+        total_tokens = 0
+        batch_correct = 0
         batch_test = iter(test_dataloader)
         sample_taken = False
         for data in batch_test:
@@ -235,8 +239,13 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
                 logits = model(encoder_input,  tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask)
                 loss = loss_fn(logits.view(-1, sp.vocab_size()), target_indices.view(-1))
                 val_loss += loss.item()
+                predictions = torch.argmax(logits, dim=-1)
+                correct = (predictions == target_indices).float()
+                batch_correct += (correct * encoder_mask.squeeze(2).squeeze(1)).sum().item()
+                total_tokens += encoder_mask.sum().item()
 
-        test_losses.append(val_loss / len(batch_test))
+        test_metrics.append((val_loss / total_tokens, np.exp(val_loss / total_tokens), 
+                             batch_correct / total_tokens * 100))
 
         if epoch % 25 == 0:
             model_filename = f"{model_dir}/Model_{epoch}"
@@ -248,29 +257,21 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
 
         if epoch % 10 == 0:
             with open(train_log_file, "a") as f:
-                for elem in list(zip(losses, accuracies)):
+                for elem in train_metrics:
                     f.write(f"{elem}\n")
 
             with open(test_log_file, "a") as f:
-                for elem in test_losses:
+                for elem in test_metrics:
                     f.write(f"{elem}\n")
 
             with open(sentences_log_file, "a") as f:
                 for elem in sentences.values():
                     f.write(f"{elem}\n")
 
-            test_losses = []
-            losses = []
+            test_metrics = []
+            train_metrics = []
             sentences = {}
-            accuracies = []
-    #with open(f"/srv/scratch/z3547870/experiments/{exp_name}_train_loss.pkl", "wb") as f:
-     #   pickle.dump(losses, f)    
-        
-   # with open(f"/srv/scratch/z3547870/experiments/{exp_name}_test_loss.pkl", "wb") as f:
-    #    pickle.dump(test_losses, f)    
-    
-   # with open(f"/srv/scratch/z3547870/experiments/{exp_name}_sentences.pkl", "wb") as f:
-    #    pickle.dump(sentences, f)    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Transformer Training")
