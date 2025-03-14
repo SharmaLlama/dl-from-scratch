@@ -1,6 +1,6 @@
 # Experiments Summary
 
-This document summarizes a series of experiments conducted on Hindi language models using the SentencePiece BPE algorithm. The experiments include details about configurations, training times, and observations for future reference.
+This document summarizes a series of experiments conducted on Hindi language models using the SentencePiece BPE algorithm. The experiments include details about configurations, training times, and observations for future reference. My baseline is to get a BLEU score of 30 with a smaller sized model on a test set which I do not touch until I feel like the model is ready. The SOTA seems to be ~40 in 2022 for BLEU.
 
 **General Settings:**
 
@@ -227,4 +227,24 @@ DROPOUT: 0.1
 - **Other Configs:**
   - **Warmup:** 2000 steps
   - **ngpus:** 4
+  - **Total Samples:** 550K
+
+## multi_hindi_restart
+These sets of experiments aim to solve a very big problem I'm encountering. When I save a model and all the optimiser dict values, even despite that the training and testing loss do not start from the same point where it stopped. 
+
+D_MODEL: 256
+N_HEADS: 4
+N_ENCODERS: 2 # 6
+N_DECODERS: 2 # 6
+FF_HIDDEN: 2048
+DROPOUT: 0.1
+SEQ_LEN: 140
+BATCH_SIZE: 1024
+TRAIN_RATIO: 0.8
+NUM_EPOCHS: 400
+LR: 0.00005
+DROPOUT: 0.1
+- **Other Configs:**
+  - **Warmup:** 2000 steps
+  - **ngpus:** 4 (H200s)
   - **Total Samples:** 550K

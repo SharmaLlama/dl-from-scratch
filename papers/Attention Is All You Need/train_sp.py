@@ -176,8 +176,8 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
     print("training batch length:", len(train_dataloader))
     count_str = f"_{counter - 1}" if counter != 0 else ""
-    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}(count_str}_train_loss.txt"
-    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_test_loss.txt"
+    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_train_loss.txt"
+    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_val_loss.txt"
     sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_sentences.txt"
 
     for log_file in [train_log_file, test_log_file, sentences_log_file]:
