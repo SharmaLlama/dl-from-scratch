@@ -30,6 +30,6 @@ class WarmupAdamOpt:
         if step ** (-0.5) < step * self.warmup ** (-1.5) and self.not_printed:
             print("warm up done")
             self.not_printed = False
-
-        return (self.model_size ** (-0.5) *
-            min(step ** (-0.5), step * self.warmup ** (-1.5))) 
+        base_lr = 1e-5
+        return max(base_lr, (self.model_size ** (-0.5) *
+            min(step ** (-0.5), step * self.warmup ** (-1.5))))
