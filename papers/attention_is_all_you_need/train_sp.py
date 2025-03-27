@@ -148,7 +148,7 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, optimser_state=None):
-    exp_name = "multi_hindi_metrics"
+    exp_name = "hindi_model_small_full"
     num_examples = 25
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
@@ -250,7 +250,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
         test_metrics.append((val_loss / total_tokens, np.exp(val_loss / total_tokens), 
                              batch_correct / total_tokens * 100))
 
-        if epoch % 25 == 0:
+        if epoch % 10 == 0:
             model_filename = f"{model_dir}/Model_{epoch}"
             torch.save({
                 'epoch': epoch,
