@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from TransformerComponents.AttentionHead import MultiHeadAttention
-from TransformerComponents.UtilsLayers import ResidualConnection, PositionWiseFFN
+from papers.attention_is_all_you_need.TransformerComponents.AttentionHead import MultiHeadAttention
+from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import ResidualConnection, PositionWiseFFN
 
 class DecoderBlock(nn.Module):
     def __init__(self, n_heads, d_model, dk, dv, d_ff, dropout):

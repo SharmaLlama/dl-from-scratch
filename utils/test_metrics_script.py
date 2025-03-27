@@ -12,10 +12,13 @@ import itertools
 import pandas as pd
 import torch.nn.functional as F
 import argparse
+import os
+import sys
 from collections import Counter
-from metrics import corpus_bleu, brevity_penality
-# parent_dir = os.path.abspath("../papers/")
-# sys.path.append(parent_dir)
+from utils.metrics import corpus_bleu, brevity_penality
+#current_dir = os.path.dirname(os.path.abspath(__file__))
+#package_path = os.path.abspath(os.path.join(current_dir, "..", "papers", "attention_is_all_you_need"))
+#sys.path.insert(0, package_path)
 from papers.attention_is_all_you_need.TransformerComponents.Encoder import Encoder
 from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decoder
 from papers.attention_is_all_you_need.TransformerComponents.PE import PositionalEmbedding
@@ -26,7 +29,10 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+YAML_PATH = os.path.join(script_dir, "..", "papers", "attention_is_all_you_need", "config.yaml")
+
+#YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -115,7 +121,7 @@ def get_data(datapath, skiprows, amount, sp):
     # encoding_hindi = list(itertools.chain.from_iterable(ref_sentences))
     # hindi_encoded = sp.encode_as_ids(encoding_hindi)[:amount]
 
-    return english_encoded, hindi_encoded, hindi_sentences
+    return english_encoded, hindi_encoded, hindi_sentences.iloc[:, 0].to_list()
 
 
 def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
