@@ -22,7 +22,7 @@ seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
+YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 

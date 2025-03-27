@@ -14,22 +14,21 @@ import torch.nn.functional as F
 import argparse
 from collections import Counter
 from metrics import corpus_bleu, brevity_penality
-import os, sys
-parent_dir = os.path.abspath("../papers/Attention Is All You Need")
-sys.path.append(parent_dir)
-from TransformerComponents.Encoder import Encoder
-from TransformerComponents.Decoder import Decoder
-from TransformerComponents.PE import PositionalEmbedding
-from TransformerComponents.Transformer import Transformer
-from TransformerComponents.UtilsLayers import Projection
+# parent_dir = os.path.abspath("../papers/")
+# sys.path.append(parent_dir)
+from papers.attention_is_all_you_need.TransformerComponents.Encoder import Encoder
+from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decoder
+from papers.attention_is_all_you_need.TransformerComponents.PE import PositionalEmbedding
+from papers.attention_is_all_you_need.TransformerComponents.Transformer import Transformer
+from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import Projection
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
-# with open(YAML_PATH, "r") as file:
-#     config = yaml.safe_load(file)
+YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
+with open(YAML_PATH, "r") as file:
+    config = yaml.safe_load(file)
 
 class LanguageTranslationDataset(Dataset):
     def __init__(self, seq_length, src_encodings, tgt_encodings, sos_token, eos_token, pad_token):

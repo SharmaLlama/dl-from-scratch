@@ -17,7 +17,7 @@ from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
 from TransformerComponents.Optimiser import WarmupAdamOpt
 
-YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
+YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
