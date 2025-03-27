@@ -120,7 +120,6 @@ def build_model(sp, device, state_dict=None):
 
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
-    # If the model is wrapped in DataParallel, use model.module
     underlying_model = model.module if hasattr(model, 'module') else model
 
     encoder_input = batch['src'].to(device)  # B x seq_len

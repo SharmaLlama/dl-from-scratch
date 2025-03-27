@@ -69,7 +69,7 @@ def closest_ref_len(references, candidate_len):
                       )
     return closest_len
 
-def corpus_bleu(references: list[list], candidates : list[str], weights=(0.25, 0.25, 0.25, 0.25)):
+def corpus_bleu(references: list[list], candidates : list[str], weights=(0.25, 0.25, 0.25, 0.25), raw_values=False):
     numerator = Counter()
     denominator = Counter()
     candidate_len, ref_len = 0, 0
@@ -84,9 +84,9 @@ def corpus_bleu(references: list[list], candidates : list[str], weights=(0.25, 0
         
         cand_len = len(candidate)
         candidate_len += cand_len
-        ref_len += closest_ref_len(references, cand_len)
-
-
+        ref_len += closest_ref_len(reference_list, cand_len)
+    if raw_values: 
+        return numerator, denominator, candidate_len, ref_len
     bp = brevity_penality(candidate_len, ref_len)
     pn = [numerator[i] / denominator[i] if denominator[i] > 0 else 0 for i in range(1, 5)]
     log_sum = sum([w * np.log(p) if p > 0 else 0 for w,p in zip(weights, pn)])
