@@ -107,12 +107,15 @@ def build_model(sp, device, state_dict=None):
 def get_data(datapath, skiprows, amount, sp):
     english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, skiprows=skiprows, nrows=amount)
     english_encoded = sp.encode_as_ids(english_sentences.iloc[:, 0].to_list())
-    with open(datapath / "test.json", 'r') as f:
-        ref_sentences = json.load(f)
-    ref_sentences = ref_sentences[0:amount]
-    encoding_hindi = list(itertools.chain.from_iterable(ref_sentences))
-    hindi_encoded = sp.encode_as_ids(encoding_hindi)[:amount]
-    return english_encoded, hindi_encoded, ref_sentences
+    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, skiprows=skiprows, nrows=amount)
+    hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[:, 0].to_list())
+    # with open(datapath / "test.json", 'r') as f:
+    #     ref_sentences = json.load(f)
+    # ref_sentences = ref_sentences[0:amount]
+    # encoding_hindi = list(itertools.chain.from_iterable(ref_sentences))
+    # hindi_encoded = sp.encode_as_ids(encoding_hindi)[:amount]
+
+    return english_encoded, hindi_encoded, hindi_sentences
 
 
 def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
