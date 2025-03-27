@@ -14,7 +14,9 @@ import torch.nn.functional as F
 import argparse
 from collections import Counter
 from metrics import corpus_bleu, brevity_penality
-
+import os, sys
+parent_dir = os.path.abspath("../papers/Attention Is All You Need")
+sys.path.append(parent_dir)
 from TransformerComponents.Encoder import Encoder
 from TransformerComponents.Decoder import Decoder
 from TransformerComponents.PE import PositionalEmbedding
@@ -26,8 +28,8 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 
 YAML_PATH = "dl-from-scratch/papers/Attention Is All You Need/config.yaml"
-with open(YAML_PATH, "r") as file:
-    config = yaml.safe_load(file)
+# with open(YAML_PATH, "r") as file:
+#     config = yaml.safe_load(file)
 
 class LanguageTranslationDataset(Dataset):
     def __init__(self, seq_length, src_encodings, tgt_encodings, sos_token, eos_token, pad_token):
