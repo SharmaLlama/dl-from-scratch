@@ -153,7 +153,6 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
         if optimser_state is not None:
-            print("state dict optimiser")
             optimiser.load_state_dict(optimser_state)
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=config['LR'], eps=1e-9)
