@@ -162,15 +162,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Transformer Training")
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--model_file", type=str, required=True)
-    parser.add_argument("--amount", type=int, required=False, default=500)
-    parser.add_argument("--llm_model_file", type=str, required=False, default="")
+    parser.add_argument("--amount", type=int, required=True)
+    parser.add_argument("--llm_model_file", type=str, required=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-    if args.llm_model_file != "":
-        checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
-    else:
-        checkpoint = {'model_state_dict' : None, 'optimiser_state_dict' : None}
-
+    checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
+    print(args.llm_model_file)
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
     model = build_model(sp, device, checkpoint['model_state_dict'])
     num_c = Counter({1: 0, 2: 0, 3: 0, 4:0})

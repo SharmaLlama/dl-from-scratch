@@ -11,12 +11,12 @@ import os
 import sentencepiece as spm
 import numpy as np
 
-from TransformerComponents.Encoder import Encoder
-from TransformerComponents.Decoder import Decoder
-from TransformerComponents.PE import PositionalEmbedding
-from TransformerComponents.Transformer import Transformer
-from TransformerComponents.UtilsLayers import Projection
-from TransformerComponents.Optimiser import WarmupAdamOpt
+from papers.attention_is_all_you_need.TransformerComponents.Encoder import Encoder
+from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decoder
+from papers.attention_is_all_you_need.TransformerComponents.PE import PositionalEmbedding
+from papers.attention_is_all_you_need.TransformerComponents.Transformer import Transformer
+from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import Projection
+from papers.attention_is_all_you_need.TransformerComponents.Optimiser import WarmupAdamOpt
 import random
 seed = 42
 random.seed(seed)
@@ -148,7 +148,7 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, optimser_state=None):
-    exp_name = "hindi_model_small_full"
+    exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
     num_examples = 25
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
