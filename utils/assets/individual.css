@@ -1,0 +1,75 @@
+body {
+    background-color: black;
+    color: white;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+.container {
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background-color: #111;
+}
+.controls {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+}
+.control-group {
+    margin-right: 20px;
+}
+.head-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.head-toggle-label {
+    margin-right: 10px;
+    white-space: nowrap;
+}
+/* Dark dropdown styles */
+.dark-dropdown .Select-control {
+    background-color: #333;
+    color: white;
+    border-color: #666;
+}
+.dark-dropdown .Select-menu-outer {
+    background-color: #333;
+    color: white;
+    border-color: #666;
+}
+.dark-dropdown .Select-option {
+    background-color: #333;
+    color: white;
+}
+.dark-dropdown .Select-option.is-selected,
+.dark-dropdown .Select-option.is-focused {
+    background-color: #555;
+    color: white;
+}
+.dark-dropdown .Select-value-label {
+    color: white !important;
+}
+.dark-dropdown .Select-placeholder {
+    color: #ccc;
+}
+.VirtualizedSelectOption {
+    background-color: #333;
+    color: white;
+}
+.VirtualizedSelectFocusedOption {
+    background-color: #555;
+    color: white;
+}
+.graph-container {
+    border: 1px solid #444;
+    border-radius: 5px;
+    overflow: hidden;
+}
