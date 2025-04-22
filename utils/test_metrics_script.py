@@ -112,17 +112,13 @@ def build_model(sp, device, state_dict=None):
     return model
 
 def get_data(datapath, skiprows, amount, sp):
-    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, skiprows=skiprows, nrows=amount)
-    english_encoded = sp.encode_as_ids(english_sentences.iloc[:, 0].to_list())
-    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, skiprows=skiprows, nrows=amount)
-    hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[:, 0].to_list())
-    # with open(datapath / "test.json", 'r') as f:
-    #     ref_sentences = json.load(f)
-    # ref_sentences = ref_sentences[0:amount]
-    # encoding_hindi = list(itertools.chain.from_iterable(ref_sentences))
-    # hindi_encoded = sp.encode_as_ids(encoding_hindi)[:amount]
+    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, skiprows=skiprows, nrows=100_000)
+    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, skiprows=skiprows, nrows=100_000)
+    idxs = random.sample(range(100_000), amount)
+    english_encoded = sp.encode_as_ids(english_sentences.iloc[idxs, 0].to_list())
+    hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[idxs, 0].to_list())
 
-    return english_encoded, hindi_encoded, hindi_sentences.iloc[:, 0].to_list()
+    return english_encoded, hindi_encoded, hindi_sentences.iloc[idxs, 0].to_list()
 
 
 def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
@@ -133,14 +129,13 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
 
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
-    with torch.inference_mode(),  torch.amp.autocast('cuda'):  # More efficient than no_grad
+    with torch.inference_mode(),  torch.amp.autocast('cuda'):
 
         underlying_model = model.module if hasattr(model, 'module') else model  
 
         encoder_input = batch['src'].to(device)  # B x seq_len
         encoder_mask = batch['encoder_mask'].to(device)  # B x 1 x 1 x seq_len
         encoder_output = underlying_model.encode(encoder_input, encoder_mask)
-    #del batch
         torch.cuda.empty_cache()
         B = encoder_input.size(0)
         decoder_input = torch.full((B, max_len), pad_token).to(device)
@@ -183,17 +178,11 @@ if __name__ == "__main__":
     
     english_encoded, hindi_encoded, ref_sentences = get_data(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
-    total_time_fp = 0
-    total_time_corp = 0
     for idx, batch in enumerate(dataloader):
-        stuff = time.time_ns()
         pred = model_prediction(model, batch, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
-        total_time_fp += time.time_ns() - stuff
 
         decoded = sp.decode(pred.detach().cpu().tolist())
-        cor = time.time_ns()
         num, denom, cand, ref = corpus_bleu(ref_sentences[(idx) * args.amount: (idx + 1) * args.amount], decoded, raw_values=True) 
-        total_time_corp += time.time_ns() - cor
         num_c += num
         denom_c += denom
         cand_len += cand
@@ -204,5 +193,4 @@ if __name__ == "__main__":
     log_sum = sum([w * np.log(p) if p > 0 else 0 for w,p in zip((0.25, 0.25, 0.25, 0.25), pn)])
     bs = bp * np.exp(log_sum)
     print(f"The BLEU score for the test set is: {bs}")
-    print(f"fp:{total_time_fp}, cb: {total_time_corp}")
     print(f"amount: {args.amount}")

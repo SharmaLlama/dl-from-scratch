@@ -22,7 +22,7 @@ class MultiHeadAttention(nn.Module):
             attention = attention.masked_fill(mask == 0, float('-inf'))        
         
         attention = F.softmax(attention, dim=-1)
-        return attention @ V, attention
+        return attention @ V, attention ## need to add back returning Q, K and then sacing them in forward
 
     def forward(self, Q, K, V, mask=None):
         query = self.w_q(Q) ## Batch x seq_len x d_model --> batch x seq_length x d_model
