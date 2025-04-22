@@ -1,3 +1,4 @@
+import time
 from collections import OrderedDict
 import sentencepiece as spm
 import torch
@@ -98,10 +99,10 @@ def build_model(sp, device, state_dict=None):
     tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
-    
+        # Setup for DistributedDataParallel
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
-    
+        print("multi_model")
     if state_dict is not None:
         model.load_state_dict(state_dict)
     elif torch.cuda.device_count() > 1:
@@ -127,34 +128,37 @@ def get_data(datapath, skiprows, amount, sp):
 def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
     full_data = LanguageTranslationDataset(seq_length=config['SEQ_LEN'], src_encodings=english_encoded, tgt_encodings=tgt_encoded, sos_token=sp.bos_id(), eos_token=sp.eos_id(),
                                         pad_token=sp.pad_id())
-    dataloader = DataLoader(full_data, batch_size=amount, pin_memory=True, shuffle=False)
+    dataloader = DataLoader(full_data, batch_size=amount, pin_memory=False, shuffle=False)
     return dataloader
 
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
-    underlying_model = model.module if hasattr(model, 'module') else model
+    with torch.inference_mode(),  torch.amp.autocast('cuda'):  # More efficient than no_grad
 
-    encoder_input = batch['src'].to(device)  # B x seq_len
-    encoder_mask = batch['encoder_mask'].to(device)  # B x 1 x 1 x seq_len
-    encoder_output = underlying_model.encode(encoder_input, encoder_mask)
+        underlying_model = model.module if hasattr(model, 'module') else model  
 
-    B = encoder_input.size(0)
-    decoder_input = torch.full((B, max_len), pad_token).to(device)
-    decoder_input[:, 0] = sos_token
-    finished = torch.zeros(B, dtype=torch.bool, device=device)
+        encoder_input = batch['src'].to(device)  # B x seq_len
+        encoder_mask = batch['encoder_mask'].to(device)  # B x 1 x 1 x seq_len
+        encoder_output = underlying_model.encode(encoder_input, encoder_mask)
+    #del batch
+        torch.cuda.empty_cache()
+        B = encoder_input.size(0)
+        decoder_input = torch.full((B, max_len), pad_token).to(device)
+        decoder_input[:, 0] = sos_token
+        finished = torch.zeros(B, dtype=torch.bool, device=device)
 
-    for t in range(max_len - 1):
-        subsequent_mask = torch.tril(torch.ones((max_len, max_len), dtype=torch.int)).expand(B, -1, -1).to(device)
-        other_mask = (decoder_input != pad_token).int().unsqueeze(1)
-        decoder_mask = (subsequent_mask & other_mask).unsqueeze(1).to(device)
-        out = underlying_model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask)
-        prediction = underlying_model.proj(out)  # shape: (B, max_len, vocab_size)
-        next_tokens = torch.argmax(prediction[:, t, :], dim=-1)
-        next_tokens = torch.where(finished, pad_token, next_tokens)
-        decoder_input[:, t + 1] = next_tokens
-        finished |= (next_tokens == eos_token)
-        if finished.all():
-            break
+        for t in range(max_len - 1):
+            subsequent_mask = torch.tril(torch.ones((max_len, max_len), dtype=torch.int)).expand(B, -1, -1).to(device)
+            other_mask = (decoder_input != pad_token).int().unsqueeze(1)
+            decoder_mask = (subsequent_mask & other_mask).unsqueeze(1).to(device)
+            out = underlying_model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask)
+            prediction = underlying_model.proj(out)  # shape: (B, max_len, vocab_size)
+            next_tokens = torch.argmax(prediction[:, t, :], dim=-1)
+            next_tokens = torch.where(finished, pad_token, next_tokens)
+            decoder_input[:, t + 1] = next_tokens
+            finished |= (next_tokens == eos_token)
+            if finished.all():
+                break
 
     return decoder_input
 
@@ -168,8 +172,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
     print(args.llm_model_file)
+
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
     model = build_model(sp, device, checkpoint['model_state_dict'])
+    model.eval()
     num_c = Counter({1: 0, 2: 0, 3: 0, 4:0})
     denom_c = Counter({1: 0, 2: 0, 3: 0, 4:0})
     ref_len = 0
@@ -177,11 +183,17 @@ if __name__ == "__main__":
     
     english_encoded, hindi_encoded, ref_sentences = get_data(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
-    
+    total_time_fp = 0
+    total_time_corp = 0
     for idx, batch in enumerate(dataloader):
+        stuff = time.time_ns()
         pred = model_prediction(model, batch, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
+        total_time_fp += time.time_ns() - stuff
+
         decoded = sp.decode(pred.detach().cpu().tolist())
+        cor = time.time_ns()
         num, denom, cand, ref = corpus_bleu(ref_sentences[(idx) * args.amount: (idx + 1) * args.amount], decoded, raw_values=True) 
+        total_time_corp += time.time_ns() - cor
         num_c += num
         denom_c += denom
         cand_len += cand
@@ -192,3 +204,5 @@ if __name__ == "__main__":
     log_sum = sum([w * np.log(p) if p > 0 else 0 for w,p in zip((0.25, 0.25, 0.25, 0.25), pn)])
     bs = bp * np.exp(log_sum)
     print(f"The BLEU score for the test set is: {bs}")
+    print(f"fp:{total_time_fp}, cb: {total_time_corp}")
+    print(f"amount: {args.amount}")
