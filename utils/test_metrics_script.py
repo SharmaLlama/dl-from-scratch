@@ -171,26 +171,15 @@ if __name__ == "__main__":
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
     model = build_model(sp, device, checkpoint['model_state_dict'])
     model.eval()
-    num_c = Counter({1: 0, 2: 0, 3: 0, 4:0})
-    denom_c = Counter({1: 0, 2: 0, 3: 0, 4:0})
-    ref_len = 0
-    cand_len = 0
-    
     english_encoded, hindi_encoded, ref_sentences = get_data(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
+    full_decoded = []
     for idx, batch in enumerate(dataloader):
         pred = model_prediction(model, batch, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
-
         decoded = sp.decode(pred.detach().cpu().tolist())
-        num, denom, cand, ref = corpus_bleu(ref_sentences[(idx) * args.amount: (idx + 1) * args.amount], decoded, raw_values=True) 
-        num_c += num
-        denom_c += denom
-        cand_len += cand
-        ref_len += ref
+        full_decoded.extend(decoded)
 
-    bp = brevity_penality(cand_len, ref_len)
-    pn = [num_c[i] / denom_c[i] if denom_c[i] > 0 else 0 for i in range(1, 5)]
-    log_sum = sum([w * np.log(p) if p > 0 else 0 for w,p in zip((0.25, 0.25, 0.25, 0.25), pn)])
-    bs = bp * np.exp(log_sum)
+
+    bs = corpus_bleu(ref_sentences, decoded, raw_values=False) 
     print(f"The BLEU score for the test set is: {bs}")
     print(f"amount: {args.amount}")
