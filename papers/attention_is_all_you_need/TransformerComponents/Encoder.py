@@ -11,8 +11,8 @@ class EncoderBlock(nn.Module):
         self.ff =  PositionWiseFFN(d_model=d_model, d_ff=d_ff)
         self.residuals = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
     
-    def forward(self, x, mask=None):
-        x = self.residuals[0](x, lambda x: self.attention(x, x, x, mask=mask))
+    def forward(self, x, mask=None, return_attention=False):
+        x = self.residuals[0](x, lambda x: self.attention(x, x, x, mask=mask, return_attention=return_attention))
         x = self.residuals[1](x, self.ff)
         return x
     
@@ -22,7 +22,7 @@ class Encoder(nn.Module):
         super().__init__()
         self.layers = nn.ModuleList([EncoderBlock(n_heads, d_model, dk, dv, d_ff, dropout) for _ in range(num)])
         # TODO: Build some LayerNormalisation Here
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, return_attention=False):
         for layer in self.layers:
-            x = layer(x, mask)
+            x = layer(x, mask, return_attention=return_attention)
         return x # Maybe needs to be a LayerNorm here as well

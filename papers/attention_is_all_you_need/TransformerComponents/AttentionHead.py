@@ -11,10 +11,9 @@ class MultiHeadAttention(nn.Module):
         self.w_o = nn.Linear(n_heads * dv, d_model, bias=False)
         self.dk = dk
         self.dv = dv
-        
 
     @staticmethod
-    def attention(Q, K, V, mask=None):
+    def attention(Q, K, V, mask=None, return_attention=False):
         dk = Q.shape[-1]
         ## Q --> batch x h x ds x dk, K --> batch x h x ds x dk, V --> batch x h x ds x dv
         attention = (Q @ K.transpose(-1, -2)) / (dk ** 0.5) # attention --> batch x h x ds x ds
@@ -22,9 +21,12 @@ class MultiHeadAttention(nn.Module):
             attention = attention.masked_fill(mask == 0, float('-inf'))        
         
         attention = F.softmax(attention, dim=-1)
-        return attention @ V, attention ## need to add back returning Q, K and then sacing them in forward
+        if return_attention:
+            attention @ V, attention, Q, K
+        else:
+            return attention @ V, attention, None, None
 
-    def forward(self, Q, K, V, mask=None):
+    def forward(self, Q, K, V, mask=None, return_attention=False):
         query = self.w_q(Q) ## Batch x seq_len x d_model --> batch x seq_length x d_model
         key = self.w_k(K) ## Batch x seq_len x d_model --> batch x seq_length x d_model
         value = self.w_v(V) ## Batch x seq_len x d_model --> batch x seq_length x d_model
@@ -32,7 +34,7 @@ class MultiHeadAttention(nn.Module):
         query = query.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
         value = value.view(batch_size, seq_length, self.n_heads, self.dv).transpose(1, 2)
         key = key.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
-        x, self.attention_scores = MultiHeadAttention.attention(query, key, value, mask=mask)
+        x, self.attention_scores, self.queries, self.keys = MultiHeadAttention.attention(query, key, value, mask=mask, return_attention=return_attention)
         x = x.transpose(1,2).contiguous().view(batch_size, seq_length, -1)
 
         x = self.w_o(x)
