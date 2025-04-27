@@ -7,8 +7,9 @@ def attention(query, key, value, rand_idx, indices, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    query = query.to(device).requires_grad_(True)
-    key = key.to(device).requires_grad_(True)
+    query = query.to(device)
+    key = key.to(device)
+    value = value.to(device)
     rand_idx_tensor = torch.tensor(rand_idx, device=device, dtype=torch.long)
     batch_size, n_heads = query.shape[0], query.shape[1]
     seq_length = query.shape[2]
