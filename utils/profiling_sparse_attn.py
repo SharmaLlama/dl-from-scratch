@@ -1,3 +1,4 @@
+import time
 import torch
 import torch.profiler as profiler
 import numpy as np
@@ -64,7 +65,9 @@ def get_function_runtime(func, *args, **kwargs):
         activities=[profiler.ProfilerActivity.CPU, profiler.ProfilerActivity.CUDA],
     ) as prof:
         with profiler.record_function("function_timing"):
+            start = time.time_ns()
             func(*args, **kwargs)
+            end = time.time_ns()
     
     # Extract just the timing information
     events = prof.key_averages()
@@ -73,7 +76,7 @@ def get_function_runtime(func, *args, **kwargs):
             cpu_time = evt.cpu_time_total  # Convert to milliseconds
             cuda_time = evt.cuda_time_total if hasattr(evt, "cuda_time_total") else 0
     
-    return cpu_time, cuda_time
+    return cpu_time, cuda_time, end - start
 
 
 def log_space_sequence(start, end, num_points):
@@ -83,8 +86,7 @@ def log_space_sequence(start, end, num_points):
 
 def reg_attention(Q, K, V, mask=None, return_attention=False):
     # Determine device and ensure tensors are on it
-    device = Q.device  # Use the device of input tensors
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Ensure tensors are on the same device (no-op if already on the right device)
     Q = Q.to(device)
     K = K.to(device)
@@ -118,6 +120,7 @@ if __name__ == "__main__":
     d_model = 512
     n_heads = 4
     dk = dv =  d_model // n_heads
+    print(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
 
     cpu_timings_sparse = []
