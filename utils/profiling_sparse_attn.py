@@ -1,10 +1,4 @@
 import torch
-import sys
-import os
-parent_dir = os.path.abspath("../")
-sys.path.append(parent_dir)
-parent_dir = os.path.abspath("../utils/")
-sys.path.append(parent_dir)
 import torch.profiler as profiler
 import numpy as np
 
@@ -40,7 +34,6 @@ def attention(query, key, rand_idx, indices, device=None):
     result = torch.zeros(
         (batch_size, n_heads, seq_length, seq_length),
         device=device,
-        requires_grad=True
     )
     result[:, :, [0, seq_length - 1], :] = first_row
     idx_list = []
@@ -73,8 +66,8 @@ def get_function_runtime(func, *args, **kwargs):
     events = prof.key_averages()
     for evt in events:
         if evt.key == "function_timing":
-            cpu_time = evt.cpu_time_total / 1000  # Convert to milliseconds
-            cuda_time = evt.cuda_time_total / 1000 if hasattr(evt, "cuda_time_total") else 0
+            cpu_time = evt.cpu_time_total  # Convert to milliseconds
+            cuda_time = evt.cuda_time_total if hasattr(evt, "cuda_time_total") else 0
     
     return cpu_time, cuda_time
 
@@ -84,6 +77,38 @@ def log_space_sequence(start, end, num_points):
     return np.unique(np.round(log_values).astype(int))
 
 
+def reg_attention(Q, K, V, mask=None, return_attention=False):
+    # Determine device and ensure tensors are on it
+    device = Q.device  # Use the device of input tensors
+    
+    # Ensure tensors are on the same device (no-op if already on the right device)
+    Q = Q.to(device)
+    K = K.to(device)
+    V = V.to(device)
+    
+    # Get dimension of keys
+    dk = Q.shape[-1]
+    
+    # Compute attention scores
+    # Q --> batch x h x ds x dk, K --> batch x h x ds x dk, V --> batch x h x ds x dv
+    attention = (Q @ K.transpose(-1, -2)) / (dk ** 0.5)  # attention --> batch x h x ds x ds
+    
+    # Apply mask if provided
+    if mask is not None:
+        mask = mask.to(device)  # Ensure mask is on the same device
+        attention = attention.masked_fill(mask == 0, float('-inf'))
+    
+    # Apply softmax to get attention weights
+    attention_weights = F.softmax(attention, dim=-1)
+    
+    # Apply attention weights to values
+    output = attention_weights @ V
+    
+    # Return attention weights if requested
+    if return_attention:
+        return output, attention_weights
+    
+    return output
 
 if __name__ == "__main__":
     d_model = 512
@@ -91,13 +116,18 @@ if __name__ == "__main__":
     dk = dv =  d_model // n_heads
 
 
+    cpu_timings_sparse = []
+    cpu_timings_reg = []
+
     batch_sizes = 2**np.arange(1, 11)
     seq_lengths = log_space_sequence(10, 512, 30)
-    timings = {batch_size : [] for batch_size in batch_sizes}
+    cpu_timings_sparse = {batch_size : [] for batch_size in batch_sizes}
+    cpu_timings_reg = {batch_size : [] for batch_size in batch_sizes}
     for batch_size in batch_sizes:
         for seq_length in seq_lengths:
             q = torch.rand(size=(batch_size, n_heads, seq_length, dk))
             k = torch.rand(size=(batch_size, n_heads, seq_length, dk))
+            v = torch.rand(size=(batch_size, n_heads, seq_length, dv))
 
             rand_idx = []
             for i in range(1, seq_length - 1):
@@ -109,6 +139,9 @@ if __name__ == "__main__":
             window_size = 3
             base = torch.arange(0, seq_length)
             indices = base.unfold(0, window_size, 1)
-            timings[batch_size].append(get_function_runtime(attention, q, k, rand_idx, indices))
-    
-    print(timings)
+            cpu_timings_sparse[batch_size].append(get_function_runtime(attention, q, k,v, rand_idx, indices))
+            cpu_timings_reg[batch_size].append(get_function_runtime(reg_attention, q, k, v))
+
+    print(cpu_timings_reg)
+    print("-----------------------------------------------------------")
+    print(cpu_timings_sparse)
