@@ -1,8 +1,9 @@
 import torch
 import torch.profiler as profiler
 import numpy as np
+import torch.nn.functional as F
 
-def attention(query, key, rand_idx, indices, device=None):
+def attention(query, key, value, rand_idx, indices, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -52,7 +53,9 @@ def attention(query, key, rand_idx, indices, device=None):
         src=attn_scores
     )
     
-    return result
+    softie = F.softmax(result, dim=-1)
+    return softie @ value
+
 
 
 def get_function_runtime(func, *args, **kwargs):
