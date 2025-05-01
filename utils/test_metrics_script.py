@@ -127,7 +127,7 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
 
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
-    with torch.inference_mode(),  torch.amp.autocast('cuda'):
+    with torch.inference_mode():
 
         underlying_model = model.module if hasattr(model, 'module') else model  
 
