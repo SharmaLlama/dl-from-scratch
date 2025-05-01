@@ -158,7 +158,7 @@ def model_prediction_ablation(model, batch, max_len, device, sp, encoder_heads=N
                 break
         return decoder_input
 
-def ablation_studies(model, dataloader, heads=4, n_encoders=2, n_decoders=2):
+def ablation_studies(model, dataloader, device, heads=4, n_encoders=2, n_decoders=2):
     removal_order = []
     bleu_scores_removal = []
     last_bleu_score = 1.0
@@ -184,7 +184,7 @@ def ablation_studies(model, dataloader, heads=4, n_encoders=2, n_decoders=2):
 
         print(f"baseline_bleu: {corpus_bleu(actual, translated)}")
 
-    while len(removal_order) < heads * total_layers and last_bleu_score > 0.05:
+    while len(removal_order) < heads * total_layers // 10 and last_bleu_score > 0.05:
         bleu_scores = {}
         
         for remover in range(heads * total_layers):
@@ -258,4 +258,4 @@ if __name__ == "__main__":
 
     english_encoded, hindi_encoded = get_encodings(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
-    ablation_studies(model, dataloader, heads=config['N_HEADS'], n_decoders=config['N_DECODERS'], n_encoders=config['N_ENCODERS'])
+    ablation_studies(model, dataloader, device, heads=config['N_HEADS'], n_decoders=config['N_DECODERS'], n_encoders=config['N_ENCODERS'])
