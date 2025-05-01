@@ -7,7 +7,7 @@ from papers.attention_is_all_you_need.TransformerComponents.PE import Positional
 from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import *
 
 class Transformer(nn.Module):
-    def __init__(self, encoder: Encoder, decoder: Decoder, src_embedding: PositionalEmbedding, tgt_embedding: PositionalEmbedding, projection: ProjectionSS):
+    def __init__(self, encoder: Encoder, decoder: Decoder, src_embedding: PositionalEmbedding, tgt_embedding: PositionalEmbedding, projection: Projection):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -28,8 +28,11 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
     
-    def forward(self, src, tgt, encoder_mask=None, decoder_mask=None, return_attention=False):
+    def forward(self, src, tgt, encoder_mask=None, decoder_mask=None, encoder_decoder_masks=None, return_attention=False):
         x_encoder = self.encode(src, encoder_mask, return_attention=return_attention)
-        x_decoder = self.decode(tgt, x_encoder, encoder_mask, decoder_mask, return_attention=return_attention)
+        if encoder_decoder_masks is not None:
+            x_decoder = self.decode(tgt, x_encoder, encoder_decoder_masks, decoder_mask, return_attention=return_attention)
+        else:
+            x_decoder = self.decode(tgt, x_encoder, encoder_mask, decoder_mask, return_attention=return_attention)
         x = self.proj(x_decoder)
         return x

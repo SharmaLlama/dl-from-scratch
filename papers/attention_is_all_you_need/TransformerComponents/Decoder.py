@@ -24,6 +24,14 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList([DecoderBlock(n_heads, d_model, dk, dv, d_ff, dropout) for _ in range(num)])
         # TODO: Build some LayerNormalisation Here
     def forward(self, x, encoder_output, encoder_mask=None, decoder_mask=None, return_attention=False):
-        for layer in self.layers:
-            x = layer(x, encoder_output, encoder_mask, decoder_mask, return_attention)
+        for idx, layer in enumerate(self.layers):
+            if type(encoder_mask) == list and type(decoder_mask) == list:
+                x = layer(x, encoder_output, encoder_mask[idx], decoder_mask[idx], return_attention)
+            elif type(encoder_mask) == list:
+                x = layer(x, encoder_output, encoder_mask[idx], decoder_mask, return_attention)
+            elif type(decoder_mask) == list:
+                x = layer(x, encoder_output, encoder_mask, decoder_mask[idx], return_attention)
+            else:
+                x = layer(x, encoder_output, encoder_mask, decoder_mask, return_attention)
+
         return x # Maybe needs to be a LayerNorm here as well

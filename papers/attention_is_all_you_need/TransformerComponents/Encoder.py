@@ -23,6 +23,9 @@ class Encoder(nn.Module):
         self.layers = nn.ModuleList([EncoderBlock(n_heads, d_model, dk, dv, d_ff, dropout) for _ in range(num)])
         # TODO: Build some LayerNormalisation Here
     def forward(self, x, mask=None, return_attention=False):
-        for layer in self.layers:
-            x = layer(x, mask, return_attention=return_attention)
+        for idx, layer in enumerate(self.layers):
+            if isinstance(mask, list):
+                x = layer(x, mask[idx], return_attention=return_attention)
+            else: 
+                x = layer(x, mask, return_attention=return_attention)
         return x # Maybe needs to be a LayerNorm here as well

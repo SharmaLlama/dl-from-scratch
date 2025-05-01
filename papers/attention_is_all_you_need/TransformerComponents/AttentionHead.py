@@ -18,11 +18,11 @@ class MultiHeadAttention(nn.Module):
         ## Q --> batch x h x ds x dk, K --> batch x h x ds x dk, V --> batch x h x ds x dv
         attention = (Q @ K.transpose(-1, -2)) / (dk ** 0.5) # attention --> batch x h x ds x ds
         if mask is not None:
-            attention = attention.masked_fill(mask == 0, float('-inf'))        
+            attention = attention.masked_fill(mask == 0, -1e9)        
         
         attention = F.softmax(attention, dim=-1)
         if return_attention:
-            attention @ V, attention, Q, K
+            return attention @ V, attention, Q, K
         else:
             return attention @ V, attention, None, None
 
