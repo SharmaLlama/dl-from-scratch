@@ -164,6 +164,26 @@ def ablation_studies(model, dataloader, heads=4, n_encoders=2, n_decoders=2):
     last_bleu_score = 1.0
     total_layers = n_encoders + 2 * n_decoders
 
+
+    translated = []
+    actual = []
+    for batch in dataloader:
+        pred = model_prediction_ablation(
+            model, 
+            batch, 
+            140, 
+            device, 
+            sp, 
+            encoder_heads=None, 
+            decoder_heads=None, 
+            encoder_decoder_heads=None
+        )
+        
+        translated.extend(sp.Decode(pred.detach().cpu().tolist()))
+        actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
+
+        print(f"baseline_bleu: {corpus_bleu(actual, translated)}")
+
     while len(removal_order) < heads * total_layers and last_bleu_score > 0.05:
         bleu_scores = {}
         

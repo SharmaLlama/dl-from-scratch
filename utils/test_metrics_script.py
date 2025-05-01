@@ -32,8 +32,6 @@ torch.manual_seed(seed)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 YAML_PATH = os.path.join(script_dir, "..", "papers", "attention_is_all_you_need", "config.yaml")
-
-#YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
