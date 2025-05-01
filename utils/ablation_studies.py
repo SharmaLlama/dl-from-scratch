@@ -9,7 +9,7 @@ import argparse
 import yaml
 import sentencepiece as spm
 import numpy as np
-from metrics import corpus_bleu
+from utils.metrics import corpus_bleu
 import numpy as np
 from papers.attention_is_all_you_need.TransformerComponents.Encoder import Encoder
 from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decoder
