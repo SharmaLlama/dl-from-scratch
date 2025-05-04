@@ -182,9 +182,9 @@ def ablation_studies(model, dataloader, device, heads=4, n_encoders=2, n_decoder
         translated.extend(sp.Decode(pred.detach().cpu().tolist()))
         actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
 
-        print(f"baseline_bleu: {corpus_bleu(actual, translated)}")
-
-    while len(removal_order) < heads * total_layers // 10 and last_bleu_score > 0.05:
+    print(f"baseline_bleu: {corpus_bleu(actual, translated)}")
+    print(heads * total_layers)
+    while len(removal_order) < (heads * total_layers) and last_bleu_score > 0.05:
         bleu_scores = {}
         
         for remover in range(heads * total_layers):
