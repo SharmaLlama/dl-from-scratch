@@ -192,9 +192,9 @@ def ablation_studies(model, dataloader, device, heads=4, n_encoders=2, n_decoder
                 continue
                 
             divider, rem = divmod(remover, heads)
-            encoder_heads = [[1 for _ in range(heads)] for _ in range(total_layers)]
-            decoder_heads = [[1 for _ in range(heads)] for _ in range(total_layers)]
-            encoder_decoder_heads = [[1 for _ in range(heads)] for _ in range(total_layers)]
+            encoder_heads = [[1 for _ in range(heads)] for _ in range(n_encoders)]
+            decoder_heads = [[1 for _ in range(heads)] for _ in range(n_decoders)]
+            encoder_decoder_heads = [[1 for _ in range(heads)] for _ in range(n_decoders)]
             
             for prev_removal in removal_order:
                 prev_div, prev_rem = divmod(prev_removal, heads)
@@ -251,7 +251,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
     print(args.llm_model_file)
-
+    splat = args.llm_model_file.split("_")
+    config['N_HEADS'] = int(splat[1])
+    config['D_MODEL'] = int(splat[2])
+    config['FF_HIDDEN'] = int(splat[3])
+    config['N_ENCODERS'] = int(splat[4])
+    config['N_DECODERS'] = int(splat[5])
+    
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
     model = build_model(sp, device, checkpoint['model_state_dict'])
     model.eval()
