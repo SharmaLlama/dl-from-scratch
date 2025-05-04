@@ -165,7 +165,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
     print(args.llm_model_file)
-    splat = args.llm_model_file.split("_")
+    splat = args.llm_model_file.split("/")[5].split("_")
     config['N_HEADS'] = int(splat[2])
     config['D_MODEL'] = int(splat[3])
     config['FF_HIDDEN'] = int(splat[4])
