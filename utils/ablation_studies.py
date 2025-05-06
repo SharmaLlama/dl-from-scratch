@@ -1,4 +1,5 @@
 
+from collections import OrderedDict
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
@@ -16,13 +17,15 @@ from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decod
 from papers.attention_is_all_you_need.TransformerComponents.PE import PositionalEmbedding
 from papers.attention_is_all_you_need.TransformerComponents.Transformer import Transformer
 from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import Projection
+import sacrebleu
 
 import random
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
+# YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
+YAML_PATH = Path("../")  / "papers" / "attention_is_all_you_need" / "config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -92,7 +95,11 @@ def build_model(sp, device, state_dict=None):
         model = torch.nn.DataParallel(model)
     
     if state_dict is not None:
-        model.load_state_dict(state_dict)
+        if torch.cuda.device_count() > 1:
+            model.load_state_dict(state_dict)
+        else: 
+            state_dict = OrderedDict((k.replace("module.", ""), v) for k, v in state_dict.items())
+            model.load_state_dict(state_dict)
     elif torch.cuda.device_count() > 1:
         model.module.initialise()
     else: 
@@ -158,7 +165,7 @@ def model_prediction_ablation(model, batch, max_len, device, sp, encoder_heads=N
                 break
         return decoder_input
 
-def ablation_studies(model, dataloader, device, heads=4, n_encoders=2, n_decoders=2):
+def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_decoders=2):
     removal_order = []
     bleu_scores_removal = []
     last_bleu_score = 1.0
@@ -182,7 +189,7 @@ def ablation_studies(model, dataloader, device, heads=4, n_encoders=2, n_decoder
         translated.extend(sp.Decode(pred.detach().cpu().tolist()))
         actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
 
-    print(f"baseline_bleu: {corpus_bleu(actual, translated)}")
+    print(f"baseline_bleu sb: {sacrebleu.corpus_bleu(translated, [actual]).score}")
     print(heads * total_layers)
     while len(removal_order) < (heads * total_layers) and last_bleu_score > 0.05:
         bleu_scores = {}
@@ -229,13 +236,14 @@ def ablation_studies(model, dataloader, device, heads=4, n_encoders=2, n_decoder
                 translated.extend(sp.Decode(pred.detach().cpu().tolist()))
                 actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
 
-            bleu_scores[remover] = corpus_bleu(actual, translated)
+            bleu_scores[remover] = sacrebleu.corpus_bleu(translated, [actual]).score
         
         max_idx = max(bleu_scores.items(), key=lambda x: x[1])[0]
         last_bleu_score = bleu_scores[max_idx]
         
         removal_order.append(max_idx)
         bleu_scores_removal.append(last_bleu_score)
+        print(f"removed idx: {max_idx}, bleu score: {last_bleu_score}")
     
     print(removal_order)
     print(bleu_scores_removal)
