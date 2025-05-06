@@ -30,7 +30,7 @@ def brevity_penality(candidate_len, ref_len):
     if candidate_len > ref_len:
         return 1
     else:
-        return np.exp(1 - ref_len/candidate_len)
+        return np.exp(1 - candidate_len/ref_len)
 
 def clipped_precision(references, candidate, n):
     n_gram_candidate = [tuple(candidate[i: i + n]) for i in range(len(candidate) - n + 1)]

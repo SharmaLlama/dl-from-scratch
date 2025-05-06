@@ -25,7 +25,7 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 # YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
-YAML_PATH = Path("../")  / "papers" / "attention_is_all_you_need" / "config.yaml"
+YAML_PATH = Path("dl-from-scratch")  / "papers" / "attention_is_all_you_need" / "config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -191,7 +191,7 @@ def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_dec
 
     print(f"baseline_bleu sb: {sacrebleu.corpus_bleu(translated, [actual]).score}")
     print(heads * total_layers)
-    while len(removal_order) < (heads * total_layers) and last_bleu_score > 0.05:
+    while len(removal_order) < (heads * total_layers) and last_bleu_score > 5:
         bleu_scores = {}
         
         for remover in range(heads * total_layers):
@@ -259,7 +259,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
     print(args.llm_model_file)
-    splat = args.llm_model_file.split("_")
+
+    splat = args.llm_model_file.split("/")[5].split("_")
     config['N_HEADS'] = int(splat[2])
     config['D_MODEL'] = int(splat[3])
     config['FF_HIDDEN'] = int(splat[4])
@@ -272,4 +273,4 @@ if __name__ == "__main__":
 
     english_encoded, hindi_encoded = get_encodings(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
-    ablation_studies(model, dataloader, device, heads=config['N_HEADS'], n_decoders=config['N_DECODERS'], n_encoders=config['N_ENCODERS'])
+    ablation_studies(model, dataloader, device, sp, heads=config['N_HEADS'], n_decoders=config['N_DECODERS'], n_encoders=config['N_ENCODERS'])

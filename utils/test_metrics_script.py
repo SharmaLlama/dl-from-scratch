@@ -16,7 +16,8 @@ import argparse
 import os
 import sys
 from collections import Counter
-from utils.metrics import corpus_bleu, brevity_penality
+import sacrebleu
+from utils.metrics import corpus_bleu
 #current_dir = os.path.dirname(os.path.abspath(__file__))
 #package_path = os.path.abspath(os.path.join(current_dir, "..", "papers", "attention_is_all_you_need"))
 #sys.path.insert(0, package_path)
@@ -100,14 +101,19 @@ def build_model(sp, device, state_dict=None):
         # Setup for DistributedDataParallel
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
-        print("multi_model")
+    
     if state_dict is not None:
-        model.load_state_dict(state_dict)
+        if torch.cuda.device_count() > 1:
+            model.load_state_dict(state_dict)
+        else: 
+            state_dict = OrderedDict((k.replace("module.", ""), v) for k, v in state_dict.items())
+            model.load_state_dict(state_dict)
     elif torch.cuda.device_count() > 1:
         model.module.initialise()
     else: 
         model.initialise() 
     return model
+
 
 def get_data(datapath, skiprows, amount, sp):
     english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, skiprows=skiprows, nrows=100_000)
@@ -178,12 +184,17 @@ if __name__ == "__main__":
     english_encoded, hindi_encoded, ref_sentences = get_data(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
     full_decoded = []
+    actual = []
     for idx, batch in enumerate(dataloader):
         pred = model_prediction(model, batch, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
         decoded = sp.decode(pred.detach().cpu().tolist())
         full_decoded.extend(decoded)
+        actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
 
-
-    bs = corpus_bleu(ref_sentences, decoded, raw_values=False) 
+    print(full_decoded)
+    print(ref_sentences)
+    bs = sacrebleu.corpus_bleu(full_decoded, [actual])
+    print(f"The BLEU score for the test set is: {bs}")
+    bs = corpus_bleu([actual], full_decoded)
     print(f"The BLEU score for the test set is: {bs}")
     print(f"amount: {args.amount}")
