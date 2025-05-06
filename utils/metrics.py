@@ -62,12 +62,9 @@ def sentence_bleu(reference : list, candidate : str, weights=(0.25, 0.25, 0.25, 
     final_score = brevity_penality(len(candidate), closest_ref_len(reference, len(candidate))) * np.exp(log_sum)
     return final_score
 
-def closest_ref_len(references, candidate_len):
-    ref_lens = (len(ref) for ref in references)
-    closest_len = min(ref_lens, 
-                      key = lambda ref_len: (abs(ref_len - candidate_len), ref_len)
-                      )
-    return closest_len
+def closest_ref_len(tokenised_refs, cand_len):
+    ref_lens = (len(r) for r in tokenised_refs)
+    return min(ref_lens, key=lambda rl: (abs(rl - cand_len), rl))
 
 def corpus_bleu(references: list[list], candidates : list[str], weights=(0.25, 0.25, 0.25, 0.25), raw_values=False):
     numerator = Counter()
@@ -75,16 +72,16 @@ def corpus_bleu(references: list[list], candidates : list[str], weights=(0.25, 0
     candidate_len, ref_len = 0, 0
     for reference_list, candidate in zip(references, candidates):
         candidate_token = indic_tokenize.trivial_tokenize(candidate)
-        reference_tokens = [indic_tokenize.trivial_tokenize(ref) for ref in reference_list]
+        reference_tokens   = [indic_tokenize.trivial_tokenize(r) for r in reference_list]
 
         for i in range(1,5):
             p_num, p_denom = clipped_precision(reference_tokens, candidate_token, i)
             numerator[i] += p_num
             denominator[i] += p_denom
         
-        cand_len = len(candidate)
+        cand_len  = len(candidate_token)                         # use tokens
+        ref_len  += closest_ref_len(reference_tokens, cand_len)   # pass tokenised refs
         candidate_len += cand_len
-        ref_len += closest_ref_len(reference_list, cand_len)
     if raw_values: 
         return numerator, denominator, candidate_len, ref_len
     bp = brevity_penality(candidate_len, ref_len)
