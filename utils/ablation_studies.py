@@ -25,7 +25,7 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 # YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
-YAML_PATH = Path("..")  / "papers" / "attention_is_all_you_need" / "config.yaml"
+YAML_PATH = Path("dl-from-scratch")  / "papers" / "attention_is_all_you_need" / "config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
