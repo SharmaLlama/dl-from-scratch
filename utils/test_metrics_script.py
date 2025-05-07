@@ -196,6 +196,6 @@ if __name__ == "__main__":
         full_decoded.extend(remove_trailing_periods(decoded))
         actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
 
-    bs = bleu(full_decoded, [actual]).score
+    bs = bleu.corpus_score(full_decoded, [actual]).score
     print(f"The BLEU score for the test set is: {bs}")
     print(f"amount: {args.amount}")
