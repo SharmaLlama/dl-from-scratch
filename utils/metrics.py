@@ -79,8 +79,8 @@ def corpus_bleu(references: list[list], candidates : list[str], weights=(0.25, 0
             numerator[i] += p_num
             denominator[i] += p_denom
         
-        cand_len  = len(candidate_token)                         # use tokens
-        ref_len  += closest_ref_len(reference_tokens, cand_len)   # pass tokenised refs
+        cand_len  = len(candidate_token)                         
+        ref_len  += closest_ref_len(reference_tokens, cand_len)
         candidate_len += cand_len
     if raw_values: 
         return numerator, denominator, candidate_len, ref_len

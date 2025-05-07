@@ -16,7 +16,7 @@ import argparse
 import os
 import sys
 from collections import Counter
-import sacrebleu
+from sacrebleu.metrics import BLEU
 from utils.metrics import corpus_bleu
 #current_dir = os.path.dirname(os.path.abspath(__file__))
 #package_path = os.path.abspath(os.path.join(current_dir, "..", "papers", "attention_is_all_you_need"))
@@ -131,6 +131,8 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, amount):
     dataloader = DataLoader(full_data, batch_size=amount, pin_memory=False, shuffle=False)
     return dataloader
 
+def remove_trailing_periods(sentences):
+    return [s[:-1] if s.endswith('.') else s for s in sentences]
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
     with torch.inference_mode():
@@ -177,24 +179,23 @@ if __name__ == "__main__":
     config['FF_HIDDEN'] = int(splat[4])
     config['N_ENCODERS'] = int(splat[5])
     config['N_DECODERS'] = int(splat[6])
+    bleu = BLEU(tokenize="intl")
 
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
     model = build_model(sp, device, checkpoint['model_state_dict'])
     model.eval()
     english_encoded, hindi_encoded, ref_sentences = get_data(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
+
     full_decoded = []
     actual = []
+    
     for idx, batch in enumerate(dataloader):
         pred = model_prediction(model, batch, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
         decoded = sp.decode(pred.detach().cpu().tolist())
-        full_decoded.extend(decoded)
-        actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
+        full_decoded.extend(remove_trailing_periods(decoded))
+        actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
 
-    print(full_decoded)
-    print(ref_sentences)
-    bs = sacrebleu.corpus_bleu(full_decoded, [actual])
-    print(f"The BLEU score for the test set is: {bs}")
-    bs = corpus_bleu([actual], full_decoded)
+    bs = bleu(full_decoded, [actual]).score
     print(f"The BLEU score for the test set is: {bs}")
     print(f"amount: {args.amount}")
