@@ -17,7 +17,7 @@ from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decod
 from papers.attention_is_all_you_need.TransformerComponents.PE import PositionalEmbedding
 from papers.attention_is_all_you_need.TransformerComponents.Transformer import Transformer
 from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import Projection
-import sacrebleu
+from sacrebleu.metrics import BLEU
 
 import random
 seed = 42
@@ -25,7 +25,7 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 # YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
-YAML_PATH = Path("dl-from-scratch")  / "papers" / "attention_is_all_you_need" / "config.yaml"
+YAML_PATH = Path("..")  / "papers" / "attention_is_all_you_need" / "config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
 
@@ -165,12 +165,15 @@ def model_prediction_ablation(model, batch, max_len, device, sp, encoder_heads=N
                 break
         return decoder_input
 
+def remove_trailing_periods(sentences):
+    return [s[:-1] if s.endswith('.') else s for s in sentences]
+
 def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_decoders=2):
     removal_order = []
     bleu_scores_removal = []
-    last_bleu_score = 1.0
+    last_bleu_score = 100
     total_layers = n_encoders + 2 * n_decoders
-
+    bleu = BLEU(tokenize='intl')
 
     translated = []
     actual = []
@@ -186,10 +189,10 @@ def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_dec
             encoder_decoder_heads=None
         )
         
-        translated.extend(sp.Decode(pred.detach().cpu().tolist()))
-        actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
+        translated.extend(remove_trailing_periods(sp.Decode(pred.detach().cpu().tolist())))
+        actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
 
-    print(f"baseline_bleu sb: {sacrebleu.corpus_bleu(translated, [actual]).score}")
+    print(f"baseline_bleu sb: {bleu.corpus_bleu(translated, [actual]).score}")
     print(heads * total_layers)
     while len(removal_order) < (heads * total_layers) and last_bleu_score > 5:
         bleu_scores = {}
@@ -233,10 +236,10 @@ def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_dec
                     encoder_decoder_heads=encoder_decoder_heads
                 )
                 
-                translated.extend(sp.Decode(pred.detach().cpu().tolist()))
-                actual.extend(sp.Decode(batch['output'].detach().cpu().tolist()))
+                translated.extend(remove_trailing_periods(sp.Decode(pred.detach().cpu().tolist())))
+                actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
 
-            bleu_scores[remover] = sacrebleu.corpus_bleu(translated, [actual]).score
+            bleu_scores[remover] = bleu.corpus_bleu(translated, [actual]).score
         
         max_idx = max(bleu_scores.items(), key=lambda x: x[1])[0]
         last_bleu_score = bleu_scores[max_idx]
