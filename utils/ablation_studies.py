@@ -245,7 +245,7 @@ def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_dec
                 translated.extend(remove_trailing_periods(sp.Decode(pred.detach().cpu().tolist())))
                 actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
 
-            bleu_scores[remover] = bleu.corpus_bleu(translated, [actual]).score
+            bleu_scores[remover] = bleu.corpus_score(translated, [actual]).score
         
         max_idx = max(bleu_scores.items(), key=lambda x: x[1])[0]
         last_bleu_score = bleu_scores[max_idx]
