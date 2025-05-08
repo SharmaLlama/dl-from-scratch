@@ -24,7 +24,6 @@ seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-# YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 YAML_PATH = Path("dl-from-scratch")  / "papers" / "attention_is_all_you_need" / "config.yaml"
 with open(YAML_PATH, "r") as file:
     config = yaml.safe_load(file)
@@ -133,6 +132,9 @@ def create_masks(ablation_mask, default_value, device):
         ablation_masks = default_value.to(device)
     return ablation_masks
 
+def remove_trailing_periods(sentences):
+    return [s[:-1] if s.endswith('.') else s for s in sentences]
+
 def model_prediction_ablation(model, batch, max_len, device, sp, encoder_heads=None, decoder_heads=None, encoder_decoder_heads=None):
     # each of the heads argument will be a list of lists is specified of 1s and 0s where 1 means that head is not abalated and 0 means it is.
     # The length of the outer list should be equal to number of layers and each inner list should be number of heads.    
@@ -165,35 +167,39 @@ def model_prediction_ablation(model, batch, max_len, device, sp, encoder_heads=N
                 break
         return decoder_input
 
-def remove_trailing_periods(sentences):
-    return [s[:-1] if s.endswith('.') else s for s in sentences]
-
-def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_decoders=2):
+def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_decoders=2, output_dir=None):
     removal_order = []
     bleu_scores_removal = []
     last_bleu_score = 100
     total_layers = n_encoders + 2 * n_decoders
     bleu = BLEU(tokenize='intl')
+    exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
+    results_file = str(Path(output_dir) / f"{exp_name}_ablation_results.txt")
+    
+    if results_file and Path(results_file).exists():
+        try:
+            with open(results_file, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    if "Step" in line and "removed" in line and ":" in line:
+                        # Parse line like "Step 1: removed 5: 19.25"
+                        parts = line.strip().split(":")
+                        removed_idx = int(parts[1].split()[1])
+                        score = float(parts[2].strip())
+                        
+                        removal_order.append(removed_idx)
+                        bleu_scores_removal.append(score)
+            
+            if removal_order:
+                print(f"Loaded {len(removal_order)} previous steps from results file")
+                last_bleu_score = bleu_scores_removal[-1]
+                print(f"Last score: {last_bleu_score}")
+        except Exception as e:
+            print(f"Error loading results file: {e}")
+            removal_order = []
+            bleu_scores_removal = []
 
-    translated = []
-    actual = []
-    for batch in dataloader:
-        pred = model_prediction_ablation(
-            model, 
-            batch, 
-            140, 
-            device, 
-            sp, 
-            encoder_heads=None, 
-            decoder_heads=None, 
-            encoder_decoder_heads=None
-        )
-        
-        translated.extend(remove_trailing_periods(sp.Decode(pred.detach().cpu().tolist())))
-        actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
-
-    print(f"baseline_bleu sb: {bleu.corpus_bleu(translated, [actual]).score}")
-    print(heads * total_layers)
+    print(f"Total possible heads to ablate: {heads * total_layers}")
     while len(removal_order) < (heads * total_layers) and last_bleu_score > 5:
         bleu_scores = {}
         
@@ -246,18 +252,23 @@ def ablation_studies(model, dataloader, device, sp, heads=4, n_encoders=2, n_dec
         
         removal_order.append(max_idx)
         bleu_scores_removal.append(last_bleu_score)
-        print(f"removed idx: {max_idx}, bleu score: {last_bleu_score}")
+        
+        step_num = len(removal_order)
+        print(f"Step {step_num}: removed {max_idx}: {last_bleu_score}")
+        
+        # Append to results file
+        if results_file:
+            with open(results_file, 'a') as f:
+                f.write(f"Step {step_num}: removed {max_idx}: {last_bleu_score}\n")
     
-    print(removal_order)
-    print(bleu_scores_removal)
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Transformer Abalation")
+    parser = argparse.ArgumentParser(description="Transformer Ablation")
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--model_file", type=str, required=True)
     parser.add_argument("--amount", type=int, required=True)
     parser.add_argument("--llm_model_file", type=str, required=True)
+    parser.add_argument("--output_dir", type=str, help="File containing previous ablation results", default=None)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
     checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
@@ -276,4 +287,14 @@ if __name__ == "__main__":
 
     english_encoded, hindi_encoded = get_encodings(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config['BATCH_SIZE'])
-    ablation_studies(model, dataloader, device, sp, heads=config['N_HEADS'], n_decoders=config['N_DECODERS'], n_encoders=config['N_ENCODERS'])
+    
+    ablation_studies(
+        model, 
+        dataloader, 
+        device, 
+        sp, 
+        heads=config['N_HEADS'], 
+        n_decoders=config['N_DECODERS'], 
+        n_encoders=config['N_ENCODERS'],
+        output_dir=args.output_dir,
+    )
