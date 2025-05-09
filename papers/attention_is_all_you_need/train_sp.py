@@ -11,12 +11,12 @@ import os
 import sentencepiece as spm
 import numpy as np
 
-from papers.attention_is_all_you_need.TransformerComponents.Encoder import Encoder
-from papers.attention_is_all_you_need.TransformerComponents.Decoder import Decoder
-from papers.attention_is_all_you_need.TransformerComponents.PE import PositionalEmbedding
-from papers.attention_is_all_you_need.TransformerComponents.Transformer import Transformer
-from papers.attention_is_all_you_need.TransformerComponents.UtilsLayers import Projection
-from papers.attention_is_all_you_need.TransformerComponents.Optimiser import WarmupAdamOpt
+from papers.TransformerComponents.Encoder import Encoder
+from papers.TransformerComponents.Decoder import Decoder
+from papers.TransformerComponents.PE import PositionalEmbedding
+from papers.TransformerComponents.Transformer import Transformer
+from papers.TransformerComponents.UtilsLayers import Projection
+from papers.TransformerComponents.Optimiser import WarmupAdamOpt
 import random
 seed = 42
 random.seed(seed)
