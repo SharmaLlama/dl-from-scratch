@@ -3,6 +3,8 @@ import torch.nn.functional as F
 import torch
 import numpy as np
 
+import math
+
 class SparseMultiHeadAttention(nn.Module):
     def __init__(self, n_heads, d_model, dk, dv, seq_len=140, global_tokens=1, window_tokens=3, random_tokens=2):
         super().__init__()
@@ -64,80 +66,77 @@ class SparseMultiHeadAttention(nn.Module):
         idx = torch.tensor(idx_list, device=device, dtype=torch.long)
         idx = idx.unsqueeze(0).unsqueeze(0) # shape: (1, 1, seq_len - g, 1 + r + w)
         return idx
-    
+           
+
     @staticmethod
-    def attention(Q, K, V, idx_tensor,  g=1, w=3, r=2, mask=None, return_attention=False):
+    def attention_sparse(Q, K, V, idx_tensor, g=1, w=3, r=2, mask=None,
+                        return_attention=False):
         """
-        Computes the sparse attention mechanism for a given set of query, key, and value tensors. I chose not to just apply the masks to calculate sparseness since
-        that would be cheating for the attention mechanism. The goal is to reduce the number of matrix multiplications even if the overall implementation is inefficient
-        due to non-optimised kernel operators and creating of zero matrix everytime this is called. 
-        Args:
-            Q (torch.Tensor): Query tensor of shape (batch_size, n_heads, seq_length, dk).
-            K (torch.Tensor): Key tensor of shape (batch_size, n_heads, seq_length, dk).
-            V (torch.Tensor): Value tensor of shape (batch_size, n_heads, seq_length, dv).
-            indices (list or torch.Tensor): List or tensor containing the indices for sparse attention.
-            mask (torch.Tensor, optional): Optional mask tensor to apply on the attention scores. Defaults to None.
-            return_attention (bool, optional): If True, returns the attention weights along with the output. Defaults to False.
-        Returns:
-            tuple: A tuple containing:
-                - torch.Tensor: The output tensor after applying attention, of shape (batch_size, n_heads, seq_length, dv).
-                - torch.Tensor: The attention weights tensor of shape (batch_size, n_heads, seq_length, seq_length).
-                - torch.Tensor or None: The query tensor (Q) if `return_attention` is True, otherwise None.
-                - torch.Tensor or None: The key tensor (K) if `return_attention` is True, otherwise None.
+        Sparse attention that keeps O(B·H·N·k) memory and FLOPs.
         """
-        batch_size, h = Q.shape[0], Q.shape[1]
-        ds = Q.shape[-2]
-        dk = Q.shape[-1]
+        B, H, N, d_k = Q.shape          # sequence length = N
+        d_v          = V.shape[-1]
+        device       = Q.device
+        n_ng         = N - 2 * g        # non-global tokens
+        k            = 1 + r + w        # first-token + random + window
 
-        ## Q --> batch x h x ds x dk, K --> batch x h x ds x dk, V --> batch x h x ds x dv
-        
-        ## global attn
-        global_idx = [i for i in range(g)] + [i for i in range(ds- g, ds)]
-        global_attn = Q[:, :, global_idx, :] @ K.transpose(-1, -2)
-        rand_idxs = idx_tensor[0, 0, :, 1: -w] # first one is zero and last w are the window tokens
-        idx_tensor = idx_tensor.expand(batch_size, h, -1, -1)
+        if g > 0:
+            global_idx = torch.cat((
+                torch.arange(g,      device=device),
+                torch.arange(N - g,  N, device=device)
+            ))                                   # (2g,)
+            print(global_idx)
+            Q_g = Q[:, :, global_idx, :]         # (B, H, 2g, d_k)
 
-        ## rand attn + window attn + 1st col attn
-        rand_keys = K[:, :, rand_idxs, :]
+            logits_g  = torch.matmul(Q_g, K.transpose(-1, -2)) / math.sqrt(d_k)
+            if mask is not None:
+                logits_g = logits_g.masked_fill(mask.unsqueeze(1).unsqueeze(1) == 0, float('-inf'))
+            prob_g = F.softmax(logits_g, dim=-1)                         # (B,H,2g,N)
+            out_g  = torch.matmul(prob_g, V)                             # (B,H,2g,d_v)
+        else:
+            out_g = None
 
-        wind_idxs = idx_tensor[0, 0, :, -w:]
-        
-        window_keys = K[:, :, wind_idxs, :]
-        first_keys = K[:, :, 0:1, :].expand(-1, -1, ds - 2 * g, -1).unsqueeze(-2)
+        if n_ng > 0:
+            Q_ng = Q[:, :, g:-g, :]                                      # (B,H,n_ng,d_k)
+            idx_exp = idx_tensor.expand(B, H, -1, -1)          # (B,H,n_ng,k)
+            K_uns  = K.unsqueeze(3)                            # (B,H,N,1,d_k)
+            idx_uns = idx_exp.unsqueeze(-1)                    # (B,H,n_ng,k,1)
 
-        combined_keys = torch.cat([
-            first_keys,
-            rand_keys[:, :, :, :],
-            window_keys
-        ], dim=-2)
+            K_sel = torch.take_along_dim(K_uns, idx_uns, dim=2)     # (B,H,n_ng,k,d_k)
 
-        attn_scores = torch.einsum("bhsd,bhskd->bhsk", Q[:, :, g:-g, :], combined_keys) ## non global attn matrix mult
-        
-        result = torch.zeros(
-            (batch_size, h, ds, ds),
-            device=Q.device,
-        )
-        result[:, :, global_idx, :] = global_attn
-        positions = torch.arange(g, ds - g)
-        temp = result[:, :, positions, :].clone()
+            V_uns  = V.unsqueeze(3)                            # (B,H,N,1,d_v)
+            V_sel  = torch.take_along_dim(V_uns, idx_uns.expand(-1,-1,-1,-1,V.shape[-1]),
+                                        dim=2)               # (B,H,n_ng,k,d_v)
+            logits_ng = torch.einsum("bhnd,bhnkd->bhnk", Q_ng, K_sel) / math.sqrt(d_k)
 
-        result[:, :, positions, :] = temp.scatter(
-            dim=-1,
-            index=idx_tensor,
-            src=attn_scores
-        )
+            if mask is not None:
+                # mask shape (B,N) → index then broadcast to logits_ng
+                mask_sel = mask.gather(1, idx_exp.view(B, -1)).view(B, n_ng, k)
+                logits_ng = logits_ng.masked_fill(mask_sel.unsqueeze(1) == 0, float('-inf'))
 
-        result /= (dk ** 0.5)
-        if mask is not None:
-            result = result.masked_fill(mask == 0, -1e9)
+            prob_ng   = F.softmax(logits_ng, dim=-1)                      # (B,H,n_ng,k)
+            out_ng    = torch.sum(prob_ng.unsqueeze(-1) * V_sel, dim=-2)  # (B,H,n_ng,d_v)
+        else:
+            out_ng = None
 
-        attention= F.softmax(result, dim=-1)
+        out = torch.empty(B, H, N, d_v, device=device)
+        if g > 0:
+            out[:, :, 0:g,     :] = out_g[:, :, 0:g, :]
+            out[:, :, N-g:N,   :] = out_g[:, :, g:,  :]
+        if n_ng > 0:
+            out[:, :, g:-g, :] = out_ng
 
         if return_attention:
-            return attention @ V, result, Q, K 
+            attn_dense = torch.zeros(B, H, N, N, device=device)
+            if g > 0:
+                attn_dense[:, :, global_idx, :] = prob_g
+            if n_ng > 0:
+                attn_dense[:, :, g:-g, :].scatter_(
+                    dim=-1, index=idx_exp, src=prob_ng
+                )
+            return out, attn_dense, Q, K
         else:
-            return attention @ V, result, None, None
-        
+            return out, None, None, None
 
     def forward(self, Q, K, V, mask=None, return_attention=False):
         query = self.w_q(Q) ## Batch x seq_len x d_model --> batch x seq_length x d_model
@@ -148,7 +147,8 @@ class SparseMultiHeadAttention(nn.Module):
         value = value.view(batch_size, seq_length, self.n_heads, self.dv).transpose(1, 2)
         key = key.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
 
-        x, self.attention_scores, self.queries, self.keys = SparseMultiHeadAttention.attention(query, key, value, idx_tensor=self.idx_tensor, 
+
+        x, self.attention_scores, self.queries, self.keys = SparseMultiHeadAttention.attention_sparse(query, key, value, idx_tensor=self.idx_tensor, 
                                                                                                g=self.global_tokens, r=self.random_tokens, 
                                                                                                w=self.window_tokens, mask=mask, return_attention=return_attention)
         x = x.transpose(1,2).contiguous().view(batch_size, seq_length, -1)
