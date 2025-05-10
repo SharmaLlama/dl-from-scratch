@@ -6,13 +6,12 @@ import numpy as np
 import math
 
 class SparseMultiHeadAttention(BaseMultiHeadAttention):
-    def __init__(self, n_heads, d_model, dk, dv, max_seq_len=140, global_tokens=1, window_tokens=3, random_tokens=2):
+    def __init__(self, n_heads, d_model, dk, dv,  global_tokens=1, window_tokens=3, random_tokens=2):
         super().__init__(n_heads, d_model, dk, dv)
         self.global_tokens = global_tokens
         self.window_tokens = window_tokens
         self.random_tokens = random_tokens
         self.len_cache = {}
-        self.idx_tensor = self.create_idx_tensor()
 
 
     @staticmethod
@@ -85,7 +84,7 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
         k = 1 + r + w                   # first-token + random + window
         
         if N not in self.len_cache:
-            idx_tensor, positions = self.create_idx_tensor(N, device)
+            idx_tensor = self.create_idx_tensor(N, device)
             self.len_cache[N] = idx_tensor
         else:
             idx_tensor = self.len_cache[N]

@@ -22,9 +22,7 @@ seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
-with open(YAML_PATH, "r") as file:
-    config = yaml.safe_load(file)
+
 
 class LanguageTranslationDataset(Dataset):
     def __init__(self, seq_length, src_encodings, tgt_encodings, sos_token, eos_token, pad_token):
@@ -90,7 +88,7 @@ def get_encodings(datapath, model_file):
     return english_encoded, hindi_encoded, sp
 
 
-def get_dataloaders(sp, english_encoded, tgt_encoded):
+def get_dataloaders(sp, english_encoded, tgt_encoded, config):
     full_data = LanguageTranslationDataset(seq_length=config['SEQ_LEN'], src_encodings=english_encoded, tgt_encodings=tgt_encoded, sos_token=sp.bos_id(), eos_token=sp.eos_id(),
                                         pad_token=sp.pad_id())
     train_data, test_data = random_split(full_data, [config['TRAIN_RATIO'], 1-config['TRAIN_RATIO']])
@@ -98,10 +96,24 @@ def get_dataloaders(sp, english_encoded, tgt_encoded):
     test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True)
     return train_dataloader, test_dataloader
 
-def build_model(sp, device, state_dict=None):
+def build_model(sp, device, config, attention_type, state_dict=None):
     vocab_size = sp.vocab_size()
-    encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
-    decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'])
+
+        # Prepare kwargs for sparse attention if needed
+    attention_kwargs = {}
+    if attention_type == 'sparse':
+        attention_kwargs = {
+            'global_tokens': config.get('SPARSE_GLOBAL_TOKENS', 1),
+            'window_tokens': config.get('SPARSE_WINDOW_TOKENS', 3),
+            'random_tokens': config.get('SPARSE_RANDOM_TOKENS', 2)
+        }
+
+    encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], 
+                                  config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'], 
+                                  attention_type=attention_type, **attention_kwargs)
+    decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], 
+                                  config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'],
+                                   attention_type=attention_type, **attention_kwargs)
     src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
     projection = Projection(config['D_MODEL'], vocab_size)
@@ -121,7 +133,6 @@ def build_model(sp, device, state_dict=None):
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
     underlying_model = model.module if hasattr(model, 'module') else model
-
     encoder_input = batch['src'].to(device)  # B x seq_len
     encoder_mask = batch['encoder_mask'].to(device)  # B x 1 x 1 x seq_len
     encoder_output = underlying_model.encode(encoder_input, encoder_mask)
@@ -147,7 +158,7 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
     return decoder_input
 
 
-def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, optimser_state=None):
+def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, attention_type="vanilla", optimser_state=None):
     exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
     num_examples = 25
     if warmup_steps != 0:
@@ -163,7 +174,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
     test_metrics = []
 
     counter = 0
-    base_model_dir = f"/srv/scratch/z3547870/Models/{exp_name}"
+    base_model_dir = f"/srv/scratch/z3547870/Models/{attention_type}/{exp_name}"
     model_dir = base_model_dir
     if os.path.exists(base_model_dir):
         counter = 1 
@@ -174,9 +185,9 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
     print("training batch length:", len(train_dataloader))
     count_str = f"_{counter - 1}" if counter != 0 else ""
-    train_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_train_loss.txt"
-    test_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_val_loss.txt"
-    sentences_log_file = f"/srv/scratch/z3547870/experiments/{exp_name}{count_str}_sentences.txt"
+    train_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_train_loss.txt"
+    test_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_val_loss.txt"
+    sentences_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_sentences.txt"
 
     for log_file in [train_log_file, test_log_file, sentences_log_file]:
         with open(log_file, "w") as f:
@@ -249,7 +260,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, op
         test_metrics.append((val_loss / total_tokens, np.exp(val_loss / total_tokens), 
                              batch_correct / total_tokens * 100))
 
-        if epoch % 10 == 0:
+        if epoch % 30 == 0:
             model_filename = f"{model_dir}/Model_{epoch}"
             torch.save({
                 'epoch': epoch,
@@ -281,13 +292,23 @@ if __name__ == "__main__":
     parser.add_argument("--model_file", type=str, required=True)
     parser.add_argument("--warmup", type=int, required=False, default=500)
     parser.add_argument("--llm_model_file", type=str, required=False, default="")
+    parser.add_argument("--attention_type", type=str, required=False, default="vanilla")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
     if args.llm_model_file != "":
         checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
     else:
         checkpoint = {'model_state_dict' : None, 'optimiser_state_dict' : None}
+
+    if args.dataset == "sparse":
+        YAML_PATH = f"dl-from-scratch/papers/big_bird_attention/config.yaml"
+    elif args.dataset == "vanilla":
+        YAML_PATH = f"dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
+
+    with open(YAML_PATH, "r") as file:
+        config = yaml.safe_load(file)
+
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
-    train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded)
-    model = build_model(sp, device, checkpoint['model_state_dict'])
-    train(model,sp, train_dataloader, test_dataloader, device, args.warmup, checkpoint['optimiser_state_dict'])
+    train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
+    model = build_model(sp, device, config, args.attention_type, checkpoint['model_state_dict'])
+    train(model,sp, train_dataloader, test_dataloader, device, args.warmup, args.attention_type, checkpoint['optimiser_state_dict'])

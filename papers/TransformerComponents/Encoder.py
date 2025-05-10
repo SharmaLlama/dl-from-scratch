@@ -1,13 +1,32 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from papers.attention_is_all_you_need.TransformerComponents.AttentionHead import MultiHeadAttention
+from papers.attention_is_all_you_need.VanillaAttentionHead import VanillaMultiHeadAttention
+from papers.big_bird_attention.SparseAttentionHead import SparseMultiHeadAttention
 from papers.TransformerComponents.UtilsLayers import PositionWiseFFN, ResidualConnection
 
 class EncoderBlock(nn.Module):
-    def __init__(self, n_heads, d_model, dk, dv, d_ff, dropout):
+    def __init__(self, n_heads, d_model, dk, dv, d_ff, dropout, attention_type='vanilla', **kwargs):
+        
         super().__init__()
-        self.attention = MultiHeadAttention(n_heads=n_heads, d_model=d_model, dk=dk, dv=dv)
+        if attention_type == 'vanilla':
+            self.attention = VanillaMultiHeadAttention(n_heads=n_heads, d_model=d_model, dk=dk, dv=dv)
+        elif attention_type == 'sparse':
+            global_tokens = kwargs.get("global_tokens", 1)
+            window_tokens = kwargs.get("window_tokens", 3)
+            random_tokens = kwargs.get("random_tokens", 2)
+            
+            self.attention = SparseMultiHeadAttention(
+                n_heads=n_heads, 
+                d_model=d_model, 
+                dk=dk, 
+                dv=dv,
+                global_tokens=global_tokens,
+                window_tokens=window_tokens,
+                random_tokens=random_tokens
+            )
+        else:
+            raise ValueError(f"Unknown attention type: {attention_type}")
         self.ff =  PositionWiseFFN(d_model=d_model, d_ff=d_ff)
         self.residuals = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
     
@@ -18,9 +37,9 @@ class EncoderBlock(nn.Module):
     
 
 class Encoder(nn.Module): 
-    def __init__(self, num,  n_heads, d_model, dk, dv, d_ff, dropout):
+    def __init__(self, num,  n_heads, d_model, dk, dv, d_ff, dropout, attention_type='vanilla', **kwargs):
         super().__init__()
-        self.layers = nn.ModuleList([EncoderBlock(n_heads, d_model, dk, dv, d_ff, dropout) for _ in range(num)])
+        self.layers = nn.ModuleList([EncoderBlock(n_heads, d_model, dk, dv, d_ff, dropout, attention_type, **kwargs) for _ in range(num)])
         # TODO: Build some LayerNormalisation Here
     def forward(self, x, mask=None, return_attention=False):
         for idx, layer in enumerate(self.layers):
