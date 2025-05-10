@@ -300,9 +300,9 @@ if __name__ == "__main__":
     else:
         checkpoint = {'model_state_dict' : None, 'optimiser_state_dict' : None}
 
-    if args.dataset == "sparse":
+    if args.attention_type == "sparse":
         YAML_PATH = f"dl-from-scratch/papers/big_bird_attention/config.yaml"
-    elif args.dataset == "vanilla":
+    elif args.attention_type == "vanilla":
         YAML_PATH = f"dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 
     with open(YAML_PATH, "r") as file:
