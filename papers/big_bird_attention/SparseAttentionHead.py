@@ -83,13 +83,21 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
         n_ng = N - 2 * g                # non-global tokens
         k = 1 + r + w                   # first-token + random + window
         
+        # if N not in self.len_cache:
+        #     idx_tensor = self.create_idx_tensor(N, device)
+        #     self.len_cache[N] = idx_tensor
+        # else:
+        #     idx_tensor = self.len_cache[N]
+        #     if idx_tensor.device != device: 
+        #         idx_tensor = idx_tensor.to(device)
+
         if N not in self.len_cache:
-            idx_tensor = self.create_idx_tensor(N, device)
-            self.len_cache[N] = idx_tensor
-        else:
-            idx_tensor = self.len_cache[N]
-            if idx_tensor.device != device: 
-                idx_tensor = idx_tensor.to(device)
+            self.len_cache[N] = {}               
+        if device not in self.len_cache[N]:
+            with torch.no_grad():
+                self.len_cache[N][device] = self.create_idx_tensor(N, device)
+
+        idx_tensor = self.len_cache[N][device]     
         
         # Process global tokens
         if g > 0:
