@@ -7,7 +7,7 @@ class VanillaMultiHeadAttention(BaseMultiHeadAttention):
         super().__init__(n_heads=n_heads, d_model=d_model, dk=dk, dv=dv)
 
 
-    def attention_pattern(Q, K, V, mask=None, return_attention=False):
+    def attention_pattern(self, Q, K, V, mask=None, return_attention=False):
         dk = Q.shape[-1]
         ## Q --> batch x h x ds x dk, K --> batch x h x ds x dk, V --> batch x h x ds x dv
         attention = (Q @ K.transpose(-1, -2)) / (dk ** 0.5) # attention --> batch x h x ds x ds

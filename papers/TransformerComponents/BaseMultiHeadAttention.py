@@ -25,7 +25,6 @@ class BaseMultiHeadAttention(nn.Module, ABC):
         raise NotImplementedError("Subclasses must implement attention_pattern")
         
     def forward(self, Q, K, V, mask=None, return_attention=False):
-
         # Common preprocessing
         query = self.w_q(Q)
         key = self.w_k(K)
