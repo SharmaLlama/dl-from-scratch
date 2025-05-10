@@ -88,6 +88,8 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
             self.len_cache[N] = idx_tensor
         else:
             idx_tensor = self.len_cache[N]
+            if idx_tensor.device != device: 
+                idx_tensor = idx_tensor.to(device)
         
         # Process global tokens
         if g > 0:
