@@ -158,7 +158,7 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
     return decoder_input
 
 
-def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, attention_type="vanilla", optimser_state=None):
+def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, config, attention_type="vanilla", optimser_state=None):
     exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
     num_examples = 25
     if warmup_steps != 0:
@@ -311,4 +311,4 @@ if __name__ == "__main__":
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
     model = build_model(sp, device, config, args.attention_type, checkpoint['model_state_dict'])
-    train(model,sp, train_dataloader, test_dataloader, device, args.warmup, args.attention_type, checkpoint['optimiser_state_dict'])
+    train(model,sp, train_dataloader, test_dataloader, device, args.warmup, config, args.attention_type, checkpoint['optimiser_state_dict'])
