@@ -181,18 +181,18 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
         counter = 1 
         while os.path.exists(model_dir):
             model_dir = f"{base_model_dir}_{counter}"
-             counter += 1
+            counter += 1
 
-     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
-     print("training batch length:", len(train_dataloader))
-     count_str = f"_{counter - 1}" if counter != 0 else ""
-     train_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_train_loss.txt"
-     test_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_val_loss.txt"
-     sentences_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_sentences.txt"
+    os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
+    print("training batch length:", len(train_dataloader))
+    count_str = f"_{counter - 1}" if counter != 0 else ""
+    train_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_train_loss.txt"
+    test_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_val_loss.txt"
+    sentences_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_sentences.txt"
 
-     for log_file in [train_log_file, test_log_file, sentences_log_file]:
-         with open(log_file, "w") as f:
-             pass  
+    for log_file in [train_log_file, test_log_file, sentences_log_file]:
+        with open(log_file, "w") as f:
+            pass  
     
     for epoch in range(1, config['NUM_EPOCHS'] + 1):
         model.train()
@@ -270,7 +270,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
                  "optimiser_state_dict": optimiser.state_dict(),
                  }, model_filename)
 
-         if epoch % 10 == 0:
+        if epoch % 10 == 0:
              with open(train_log_file, "a") as f:
                  for elem in train_metrics:
                      f.write(f"{elem}\n")
