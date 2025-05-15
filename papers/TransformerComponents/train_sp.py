@@ -92,8 +92,8 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, config):
     full_data = LanguageTranslationDataset(seq_length=config['SEQ_LEN'], src_encodings=english_encoded, tgt_encodings=tgt_encoded, sos_token=sp.bos_id(), eos_token=sp.eos_id(),
                                         pad_token=sp.pad_id())
     train_data, test_data = random_split(full_data, [config['TRAIN_RATIO'], 1-config['TRAIN_RATIO']])
-    train_dataloader = DataLoader(train_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=12)
-    test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=12)
+    train_dataloader = DataLoader(train_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=4)
+    test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=4)
 
     return train_dataloader, test_dataloader
 
@@ -173,36 +173,34 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
     sentences = {}
     train_metrics = []
     test_metrics = []
+    
+    counter = 0
+    base_model_dir = f"/srv/scratch/z3547870/Models/{attention_type}/{exp_name}"
+    model_dir = base_model_dir
+    if os.path.exists(base_model_dir):
+        counter = 1 
+        while os.path.exists(model_dir):
+            model_dir = f"{base_model_dir}_{counter}"
+             counter += 1
 
-    # counter = 0
-    # base_model_dir = f"/srv/scratch/z3547870/Models/{attention_type}/{exp_name}"
-    # model_dir = base_model_dir
-    # if os.path.exists(base_model_dir):
-    #     counter = 1 
-    #     while os.path.exists(model_dir):
-    #         model_dir = f"{base_model_dir}_{counter}"
-    #         counter += 1
+     os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
+     print("training batch length:", len(train_dataloader))
+     count_str = f"_{counter - 1}" if counter != 0 else ""
+     train_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_train_loss.txt"
+     test_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_val_loss.txt"
+     sentences_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_sentences.txt"
 
-    # os.makedirs(model_dir, exist_ok=True)  # Ensure the directory exists
-    # print("training batch length:", len(train_dataloader))
-    # count_str = f"_{counter - 1}" if counter != 0 else ""
-    # train_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_train_loss.txt"
-    # test_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_val_loss.txt"
-    # sentences_log_file = f"/srv/scratch/z3547870/experiments/{attention_type}/{exp_name}{count_str}_sentences.txt"
-
-    # for log_file in [train_log_file, test_log_file, sentences_log_file]:
-    #     with open(log_file, "w") as f:
-    #         pass  
+     for log_file in [train_log_file, test_log_file, sentences_log_file]:
+         with open(log_file, "w") as f:
+             pass  
     
     for epoch in range(1, config['NUM_EPOCHS'] + 1):
-        print("Epoch:", epoch)
         model.train()
         batch_train = iter(train_dataloader)
         batch_loss = 0
         total_tokens = 0
         batch_correct = 0
         for data in batch_train:
-            print("data")
             target_indices = data['output'].to(device) # B x seq_len
             encoder_input = data['src'].to(device) # B x seq_len
             tgt_input = data['tgt'].to(device) # B x seq_len
@@ -233,7 +231,6 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
         batch_correct = 0
         batch_test = iter(test_dataloader)
         sample_taken = False
-        print("val started")
         for data in batch_test:
             with torch.no_grad():
                 target_indices = data['output'].to(device)
@@ -265,30 +262,30 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
                              batch_correct / total_tokens * 100))
         
 
-        # if epoch % 30 == 0:
-        #     model_filename = f"{model_dir}/Model_{epoch}"
-        #     torch.save({
-        #         'epoch': epoch,
-        #         "model_state_dict": model.state_dict(),
-        #         "optimiser_state_dict": optimiser.state_dict(),
-        #         }, model_filename)
+        if epoch % 10 == 0:
+             model_filename = f"{model_dir}/Model_{epoch}"
+             torch.save({
+                 'epoch': epoch,
+                 "model_state_dict": model.state_dict(),
+                 "optimiser_state_dict": optimiser.state_dict(),
+                 }, model_filename)
 
-        # if epoch % 10 == 0:
-        #     with open(train_log_file, "a") as f:
-        #         for elem in train_metrics:
-        #             f.write(f"{elem}\n")
+         if epoch % 10 == 0:
+             with open(train_log_file, "a") as f:
+                 for elem in train_metrics:
+                     f.write(f"{elem}\n")
 
-        #     with open(test_log_file, "a") as f:
-        #         for elem in test_metrics:
-        #             f.write(f"{elem}\n")
+             with open(test_log_file, "a") as f:
+                 for elem in test_metrics:
+                     f.write(f"{elem}\n")
 
-        #     with open(sentences_log_file, "a") as f:
-        #         for elem in sentences.values():
-        #             f.write(f"{elem}\n")
+             with open(sentences_log_file, "a") as f:
+                 for elem in sentences.values():
+                     f.write(f"{elem}\n")
 
-            # test_metrics = []
-            # train_metrics = []
-            # sentences = {}
+             test_metrics = []
+             train_metrics = []
+             sentences = {}
 
 
 if __name__ == "__main__":
