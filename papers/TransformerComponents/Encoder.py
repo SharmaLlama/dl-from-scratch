@@ -7,7 +7,6 @@ from papers.TransformerComponents.UtilsLayers import PositionWiseFFN, ResidualCo
 
 class EncoderBlock(nn.Module):
     def __init__(self, n_heads, d_model, dk, dv, d_ff, dropout, attention_type='vanilla', **kwargs):
-        
         super().__init__()
         if attention_type == 'vanilla':
             self.attention = VanillaMultiHeadAttention(n_heads=n_heads, d_model=d_model, dk=dk, dv=dv)
