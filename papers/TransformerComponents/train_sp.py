@@ -92,13 +92,9 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, config):
     full_data = LanguageTranslationDataset(seq_length=config['SEQ_LEN'], src_encodings=english_encoded, tgt_encodings=tgt_encoded, sos_token=sp.bos_id(), eos_token=sp.eos_id(),
                                         pad_token=sp.pad_id())
     train_data, test_data = random_split(full_data, [config['TRAIN_RATIO'], 1-config['TRAIN_RATIO']])
-<<<<<<< HEAD
     train_dataloader = DataLoader(train_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=12)
     test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=12)
-=======
-    train_dataloader = DataLoader(train_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=0)
-    test_dataloader = DataLoader(test_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True,  num_workers=0)
->>>>>>> 9633208 (thunder compute)
+
     return train_dataloader, test_dataloader
 
 def build_model(sp, device, config, attention_type, state_dict=None):
@@ -206,6 +202,7 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
         total_tokens = 0
         batch_correct = 0
         for data in batch_train:
+            print("data")
             target_indices = data['output'].to(device) # B x seq_len
             encoder_input = data['src'].to(device) # B x seq_len
             tgt_input = data['tgt'].to(device) # B x seq_len

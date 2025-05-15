@@ -156,18 +156,14 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
                         ).reshape(B, H, n_ng, k)
                         logits_ng = logits_ng.masked_fill(gathered_mask == 0, -1e9)
                     elif mask.shape[1] == 1:  # B x 1 x seq_len x seq_len
-                        # For attention masks: get the mask values for non-global positions
-                        ng_positions = torch.arange(g, N-g, device=device)
-                        # Gather mask values for the specific indices
-                        mask_values = torch.zeros(B, H, n_ng, k, device=device)
-                        for b in range(B):
-                            for i in range(n_ng):
-                                pos = ng_positions[i]
-                                for j in range(k):
-                                    idx = idx_exp[b, 0, i, j]
-                                    mask_values[b, :, i, j] = mask[b, 0, pos, idx]
-                        logits_ng = logits_ng.masked_fill(mask_values == 0, -1e9)
-            
+                        mask_bh   = mask.squeeze(1).unsqueeze(1)   # (B,1,N,N) → broadcast later
+                        if mask_bh.size(1) != H:
+                            mask_bh = mask_bh.expand(-1, H, -1, -1)
+
+                        mask_rows = mask_bh[:, :, g:-g, :]         # (B,H,n_ng,N)
+                        gathered  = torch.gather(mask_rows, -1, idx_exp)  # (B,H,n_ng,k)
+                        logits_ng = logits_ng.masked_fill(gathered == 0, -1e9)
+                                
             prob_ng = F.softmax(logits_ng, dim=-1)  # (B,H,n_ng,k)
             out_ng = torch.sum(prob_ng.unsqueeze(-1) * V_sel, dim=-2)  # (B,H,n_ng,d_v)
         else:
