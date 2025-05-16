@@ -160,7 +160,11 @@ def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_to
 
 
 def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, config, attention_type="vanilla", optimser_state=None):
-    exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
+    if attention_type == "vanilla":
+        exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
+    elif attention_type == "sparse":
+        exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}_{config['GLOBAL_ATTENTION']}_{config['LOCAL_ATTENTION']}_{config['RANDOM_ATTENTION']}"
+
     num_examples = 25
     if warmup_steps != 0:
         optimiser = WarmupAdamOpt(config['D_MODEL'], warmup_steps, torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
