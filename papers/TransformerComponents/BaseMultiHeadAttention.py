@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from abc import ABC, abstractmethod
 
 class BaseMultiHeadAttention(nn.Module, ABC):
-    def __init__(self, n_heads, d_model, dk, dv):
+    def __init__(self, n_heads, d_model, dk, dv, group_sizes=1):
         super().__init__()
         self.n_heads = n_heads
         self.w_q = nn.Linear(d_model, n_heads * dk, bias=False)
@@ -14,6 +14,7 @@ class BaseMultiHeadAttention(nn.Module, ABC):
         self.w_o = nn.Linear(n_heads * dv, d_model, bias=False)
         self.dk = dk
         self.dv = dv
+        self.group_sizes = group_sizes
         
     @abstractmethod
     def attention_pattern(self, Q, K, V, mask=None, return_attention=False):
@@ -33,7 +34,9 @@ class BaseMultiHeadAttention(nn.Module, ABC):
         query = query.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
         value = value.view(batch_size, seq_length, self.n_heads, self.dv).transpose(1, 2)
         key = key.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
-        
+        key = key.view(batch_size, seq_length, self.n_heads // self.group_sizes, self.group_sizes, self.dk).mean(dim=3)
+        value = value.view(batch_size, seq_length, self.n_heads // self.group_sizes, self.group_sizes, self.dv).mean(dim=3)
+
         # Call the attention pattern
         x, self.attention_scores, self.queries, self.keys = self.attention_pattern(
             query, key, value, mask=mask, return_attention=return_attention
