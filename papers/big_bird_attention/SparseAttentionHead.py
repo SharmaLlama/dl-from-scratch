@@ -60,8 +60,13 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
             rand_idx.append(rdx_idx)
 
         idx_list = []
+
         for i in range(len(range(self.global_tokens, seq_length - self.global_tokens))):
-            row = [0] + rand_idx[i] + indices[i].tolist()
+            if i == seq_length - 1:
+                row = [0] + rand_idx[i] + [seq_length - i for i in range(self.window_tokens)] 
+            else:
+                row = [0] + rand_idx[i] + indices[i].tolist()
+
             idx_list.append(row)
         
         idx = torch.tensor(idx_list, device=device, dtype=torch.long)
@@ -83,14 +88,6 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
         n_ng = N - 2 * g                # non-global tokens
         k = 1 + r + w                   # first-token + random + window
         
-        # if N not in self.len_cache:
-        #     idx_tensor = self.create_idx_tensor(N, device)
-        #     self.len_cache[N] = idx_tensor
-        # else:
-        #     idx_tensor = self.len_cache[N]
-        #     if idx_tensor.device != device: 
-        #         idx_tensor = idx_tensor.to(device)
-
         if N not in self.len_cache:
             self.len_cache[N] = {}               
         if device not in self.len_cache[N]:
@@ -127,11 +124,11 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
         
         # Process non-global tokens
         if n_ng > 0:
-            Q_ng = Q[:, :, g:-g, :]                # (B,H,n_ng,d_k)
+            Q_ng = Q if g == 0 else Q[:, :, g:-g, :]                # (B,H,n_ng,d_k)
             idx_exp = idx_tensor.expand(B, H, -1, -1)  # (B,H,n_ng,k)
-            K_uns = K.unsqueeze(3)                 # (B,H,N,1,d_k)
+            K_uns = K.unsqueeze(3)   # (B,H,N,1,d_k)
+            idx_exp = torch.clamp(idx_exp, 0, N-1)
             idx_uns = idx_exp.unsqueeze(-1)        # (B,H,n_ng,k,1)
-            
             K_sel = torch.take_along_dim(K_uns, idx_uns, dim=2)  # (B,H,n_ng,k,d_k)
             
             V_uns = V.unsqueeze(3)                 # (B,H,N,1,d_v)
@@ -175,16 +172,23 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
             out[:, :, 0:g, :] = out_g[:, :, 0:g, :]
             out[:, :, N-g:N, :] = out_g[:, :, g:, :]
         if n_ng > 0:
-            out[:, :, g:-g, :] = out_ng
+            if g > 0:
+                out[:, :, g:-g, :] = out_ng
+            else:
+                out[:, :, :, :] = out_ng
+
         
         if return_attention:
             attn_dense = torch.zeros(B, H, N, N, device=device)
             if g > 0:
                 attn_dense[:, :, global_idx, :] = prob_g
             if n_ng > 0:
-                attn_dense[:, :, g:-g, :].scatter_(
-                    dim=-1, index=idx_exp, src=prob_ng
-                )
+                if g > 0:
+                    attn_dense[:, :, g:-g, :].scatter_(
+                    dim=-1, index=idx_exp, src=prob_ng)
+                else:
+                    attn_dense[:, :, :, :].scatter_(
+                        dim=-1, index=idx_exp, src=prob_ng)
             return out, attn_dense, Q, K
         else:
             return out, None, None, None
