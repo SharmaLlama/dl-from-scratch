@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from papers.TransformerComponents.Encoder import Encoder
 from papers.TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.PE import PositionalEmbedding
+from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
 from papers.TransformerComponents.UtilsLayers import *
 
 class Transformer(nn.Module):

@@ -12,7 +12,7 @@ import os
 from BPE.bpe import BPEEncoder, BPEDecoder
 from TransformerComponents.Encoder import Encoder
 from TransformerComponents.Decoder import Decoder
-from TransformerComponents.PE import PositionalEmbedding
+from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
 from TransformerComponents.Transformer import Transformer
 from TransformerComponents.UtilsLayers import Projection
 from TransformerComponents.Optimiser import WarmupAdamOpt

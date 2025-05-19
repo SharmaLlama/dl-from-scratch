@@ -6,6 +6,15 @@ import numpy as np
 import math
 
 class SparseMultiHeadAttention(BaseMultiHeadAttention):
+    """
+    SparseMultiHeadAttention implements a sparse attention mechanism that reduces memory and computational complexity 
+    by focusing on a subset of tokens in the sequence. This class extends the BaseMultiHeadAttention class.
+    Attributes:
+        global_tokens (int): Number of global tokens that attend to all tokens in the sequence.
+        window_tokens (int): Number of consecutive tokens attended to in a sliding window manner.
+        random_tokens (int): Number of randomly selected tokens attended to for each token.
+        len_cache (dict): Cache for storing precomputed index tensors for different sequence lengths and devices.
+    """
     def __init__(self, n_heads, d_model, dk, dv,  global_tokens=1, window_tokens=3, random_tokens=2):
         super().__init__(n_heads, d_model, dk, dv)
         self.global_tokens = global_tokens
@@ -76,7 +85,40 @@ class SparseMultiHeadAttention(BaseMultiHeadAttention):
            
     def attention_pattern(self, Q, K, V, mask=None, return_attention=False):
         """
-        Sparse attention that keeps O(B·H·N·k) memory and FLOPs.
+        Implements sparse attention with reduced memory and computational complexity.
+        This method computes attention using a sparse pattern that includes global tokens,
+        random tokens, and window tokens. It reduces the memory and computational requirements
+        to O(B·H·N·k), where B is the batch size, H is the number of attention heads, N is the
+        sequence length, and k is the number of tokens attended to by each token.
+        Args:
+            Q (torch.Tensor): Query tensor of shape (B, H, N, d_k), where B is the batch size,
+                H is the number of attention heads, N is the sequence length, and d_k is the
+                dimensionality of the query/key vectors.
+            K (torch.Tensor): Key tensor of shape (B, H, N, d_k).
+            V (torch.Tensor): Value tensor of shape (B, H, N, d_v), where d_v is the
+                dimensionality of the value vectors.
+            mask (torch.Tensor, optional): Attention mask tensor. Can have one of the following
+                shapes:
+                - (B, 1, 1, N): Broadcastable mask for all heads and tokens.
+                - (B, 1, N, N): Mask for all heads with specific token-to-token masking.
+                Defaults to None.
+            return_attention (bool, optional): If True, returns the attention weights along
+                with the output. Defaults to False.
+        Returns:
+            tuple:
+                - out (torch.Tensor): Output tensor of shape (B, H, N, d_v) containing the
+                  attended values.
+                - attn_dense (torch.Tensor or None): Dense attention weights of shape
+                  (B, H, N, N) if `return_attention` is True, otherwise None.
+                - Q (torch.Tensor or None): The input query tensor, returned as-is if
+                  `return_attention` is True, otherwise None.
+                - K (torch.Tensor or None): The input key tensor, returned as-is if
+                  `return_attention` is True, otherwise None.
+        Notes:
+            - The method handles both global and non-global tokens separately.
+            - Global tokens attend to all tokens, while non-global tokens attend to a
+              subset of tokens determined by the sparse attention pattern.
+            - The method supports causal and non-causal masks.
         """
 
         B, H, N, d_k = Q.shape          # sequence length = N
