@@ -1,4 +1,4 @@
-from papers.TransformerComponents.BaseMultiHeadAttention import BaseMultiHeadAttention
+from papers.CommonTransformerComponents.BaseMultiHeadAttention import BaseMultiHeadAttention
 import torch.nn as nn
 import torch.nn.functional as F
 import torch

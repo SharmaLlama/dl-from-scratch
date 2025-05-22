@@ -12,11 +12,11 @@ import sentencepiece as spm
 import numpy as np
 from utils.metrics import corpus_bleu
 import numpy as np
-from papers.TransformerComponents.Encoder import Encoder
-from papers.TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
-from papers.TransformerComponents.Transformer import Transformer
-from papers.TransformerComponents.UtilsLayers import Projection
+from papers.CommonTransformerComponents.Encoder import Encoder
+from papers.CommonTransformerComponents.Decoder import Decoder
+from papers.CommonTransformerComponents.BasePositionalEncoding import PositionalEmbedding
+from papers.CommonTransformerComponents.Transformer import Transformer
+from papers.CommonTransformerComponents.UtilsLayers import Projection
 from sacrebleu.metrics import BLEU
 
 import random

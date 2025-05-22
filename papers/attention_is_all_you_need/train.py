@@ -10,12 +10,12 @@ import yaml
 import os
 
 from BPE.bpe import BPEEncoder, BPEDecoder
-from TransformerComponents.Encoder import Encoder
-from TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
-from TransformerComponents.Transformer import Transformer
-from TransformerComponents.UtilsLayers import Projection
-from TransformerComponents.Optimiser import WarmupAdamOpt
+from CommonTransformerComponents.Encoder import Encoder
+from CommonTransformerComponents.Decoder import Decoder
+from papers.CommonTransformerComponents.BasePositionalEncoding import PositionalEmbedding
+from CommonTransformerComponents.Transformer import Transformer
+from CommonTransformerComponents.UtilsLayers import Projection
+from CommonTransformerComponents.Optimiser import WarmupAdamOpt
 
 YAML_PATH = "dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
 with open(YAML_PATH, "r") as file:

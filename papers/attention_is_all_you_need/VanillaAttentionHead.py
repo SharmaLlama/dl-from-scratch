@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from papers.TransformerComponents.BaseMultiHeadAttention import BaseMultiHeadAttention
+from papers.CommonTransformerComponents.BaseMultiHeadAttention import BaseMultiHeadAttention
 
 class VanillaMultiHeadAttention(BaseMultiHeadAttention):
     class VanillaMultiHeadAttention:

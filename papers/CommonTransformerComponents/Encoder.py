@@ -3,7 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from papers.attention_is_all_you_need.VanillaAttentionHead import VanillaMultiHeadAttention
 from papers.big_bird_attention.SparseAttentionHead import SparseMultiHeadAttention
-from papers.TransformerComponents.UtilsLayers import PositionWiseFFN, ResidualConnection
+from papers.CommonTransformerComponents.UtilsLayers import PositionWiseFFN, ResidualConnection
+from papers.RoPE.RoPEAttentionHead import RoPEMultiHeadAttention
 
 class EncoderBlock(nn.Module):
     def __init__(self, n_heads, d_model, dk, dv, d_ff, dropout, attention_type='vanilla', **kwargs):
@@ -24,6 +25,8 @@ class EncoderBlock(nn.Module):
                 window_tokens=window_tokens,
                 random_tokens=random_tokens
             )
+        elif attention_type == 'rope':
+            self.attention = RoPEMultiHeadAttention(n_heads=n_heads, d_model=d_model, dk=dk, dv=dv)
         else:
             raise ValueError(f"Unknown attention type: {attention_type}")
         self.ff =  PositionWiseFFN(d_model=d_model, d_ff=d_ff)

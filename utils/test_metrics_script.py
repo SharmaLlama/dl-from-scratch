@@ -23,7 +23,7 @@ from utils.metrics import corpus_bleu
 #sys.path.insert(0, package_path)
 from papers.TransformerComponents.Encoder import Encoder
 from papers.TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.PE import PositionalEmbedding
+from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
 from papers.TransformerComponents.Transformer import Transformer
 from papers.TransformerComponents.UtilsLayers import Projection
 seed = 42

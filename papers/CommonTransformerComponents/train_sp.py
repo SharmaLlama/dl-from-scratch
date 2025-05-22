@@ -11,12 +11,12 @@ import os
 import sentencepiece as spm
 import numpy as np
 
-from papers.TransformerComponents.Encoder import Encoder
-from papers.TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
-from papers.TransformerComponents.Transformer import Transformer
-from papers.TransformerComponents.UtilsLayers import Projection
-from papers.TransformerComponents.Optimiser import WarmupAdamOpt
+from papers.CommonTransformerComponents.Encoder import Encoder
+from papers.CommonTransformerComponents.Decoder import Decoder
+from papers.CommonTransformerComponents.BasePositionalEncoding import PositionalEmbedding
+from papers.CommonTransformerComponents.Transformer import Transformer
+from papers.CommonTransformerComponents.UtilsLayers import Projection
+from papers.CommonTransformerComponents.Optimiser import WarmupAdamOpt
 import random
 seed = 42
 random.seed(seed)
@@ -100,7 +100,7 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, config):
 def build_model(sp, device, config, attention_type, state_dict=None):
     vocab_size = sp.vocab_size()
 
-        # Prepare kwargs for sparse attention if needed
+    # Prepare kwargs for sparse attention if needed
     attention_kwargs = {}
     if attention_type == 'sparse':
         attention_kwargs = {
@@ -115,8 +115,8 @@ def build_model(sp, device, config, attention_type, state_dict=None):
     decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], 
                                   config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'],
                                    attention_type=attention_type, **attention_kwargs)
-    src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
-    tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'])
+    src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'], sin_embedding=True if attention_type != "rope" else False)
+    tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'], sin_embedding=True if attention_type != "rope" else False)
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
     
@@ -164,6 +164,8 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
         exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
     elif attention_type == "sparse":
         exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}_{config['GLOBAL_ATTENTION']}_{config['LOCAL_ATTENTION']}_{config['RANDOM_ATTENTION']}"
+    elif attention_type == "rope":
+        exp_name = f"hindi_model_{config['N_HEADS']}_{config['D_MODEL']}_{config['FF_HIDDEN']}_{config['N_ENCODERS']}_{config['N_DECODERS']}"
 
     num_examples = 25
     if warmup_steps != 0:
@@ -310,6 +312,9 @@ if __name__ == "__main__":
         YAML_PATH = f"dl-from-scratch/papers/big_bird_attention/config.yaml"
     elif args.attention_type == "vanilla":
         YAML_PATH = f"dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
+    elif args.attention_type == "rope":
+        YAML_PATH = f"dl-from-scratch/papers/RoPE/config.yaml"
+
 
     with open(YAML_PATH, "r") as file:
         config = yaml.safe_load(file)
