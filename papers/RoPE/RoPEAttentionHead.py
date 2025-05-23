@@ -16,7 +16,7 @@ class RoPEMultiHeadAttention(BaseMultiHeadAttention):
     """
     def __init__(self, n_heads, d_model, dk, dv, max_seq_len=140):
         super().__init__(n_heads=n_heads, d_model=d_model, dk=dk, dv=dv)
-        self.rope = RotaryEmbedding(self.head_dim, 10_000, max_seq_len=max_seq_len)
+        self.rope = RotaryEmbedding(dk, 10_000, max_seq_len=max_seq_len)
 
     def attention_pattern(self, Q, K, V, mask=None, return_attention=False):
         """
