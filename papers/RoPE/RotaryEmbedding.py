@@ -25,15 +25,21 @@ class RotaryEmbedding(nn.Module):
                 ValueError: If `dim` is not an even number.
 
     """
-    def __init__(self, dim: int, base: float = 10000.0, max_seq_len: int = 512):
+    def __init__(self, dim, base=10000.0, max_seq_len=512):
         super().__init__()
         if dim % 2 != 0:
-            raise ValueError("dim must be even for 2‑D rotation pairs.")
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        inv_freq = (1.0 / (base ** (torch.arange(0, dim // 2).float() / dim))).to(device)
-        self.register_buffer("inv_freq", inv_freq, persistent=False)
+            raise ValueError("dim must be even")
+
+        # Create on CPU
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim//2).float() / dim))
+        self.register_buffer("inv_freq", inv_freq)
+
         self.max_seq_len = max_seq_len
-        self.sin, self.cos = self.get_sin_cos(max_seq_len, device)
+
+        # Precompute on CPU, too
+        sin, cos = self._build_sin_cos(max_seq_len, device=None, dtype=inv_freq.dtype)
+        self.register_buffer("sin", sin)
+        self.register_buffer("cos", cos)
   
     def get_sin_cos(self, seq_len, device= None, dtype= None):
         """
@@ -51,33 +57,36 @@ class RotaryEmbedding(nn.Module):
                 - sin (torch.Tensor): The sine positional encodings, repeated along the last dimension.
                 - cos (torch.Tensor): The cosine positional encodings, repeated along the last dimension.
         """
-
         device = device or self.inv_freq.device
-        dtype = dtype or self.inv_freq.dtype
+        dtype  = dtype  or self.inv_freq.dtype
 
-        positions = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
-        angles = torch.einsum("i,j->ij", positions, self.inv_freq)
-        angles = angles.to(dtype)
+        pos = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+        angles = torch.einsum("i,j->ij", pos, self.inv_freq).to(dtype)
         sin, cos = angles.sin(), angles.cos()
-        sin = torch.repeat_interleave(sin, repeats=2, dim=-1)
-        cos = torch.repeat_interleave(cos, repeats=2, dim=-1)
+        sin = sin.repeat_interleave(2, dim=-1)
+        cos = cos.repeat_interleave(2, dim=-1)
         return sin, cos
+
 
     @staticmethod
     def _rotate_half(x: torch.Tensor) -> torch.Tensor:
         x_even, x_odd = x.chunk(2, dim=-1)
         return torch.cat((-x_odd, x_even), dim=-1)
+    
+    def forward(self, x, offset=0):
+            # ensure sin/cos live on same device as x
+            sin = self.sin.to(x.device) 
+            cos = self.cos.to(x.device)
+            if offset > 0 or x.size(-2) != self.max_seq_len:
+                sin, cos = self._build_sin_cos(x.size(-2) + offset,
+                                            device=x.device,
+                                            dtype=x.dtype)
+                sin = sin[offset:offset + x.size(-2)]
+                cos = cos[offset:offset + x.size(-2)]
 
-    def forward(self, x: torch.Tensor, offset: int = 0) -> torch.Tensor: 
-        if offset  > 0 or x.size(-2) != self.max_seq_len:
-            sin, cos = self.get_sin_cos(x.size(-2) + offset, x.device, x.dtype)
-            sin = sin[offset: offset + x.size(-2)]
-            cos = cos[offset: offset + x.size(-2)]
-        else:
-            sin, cos = self.sin, self.cos
+            # unsqueeze to match batch dims…
+            while sin.dim() < x.dim():
+                sin = sin.unsqueeze(0)
+                cos = cos.unsqueeze(0)
 
-        while sin.dim() < x.dim():
-            sin = sin.unsqueeze(0)
-            cos = cos.unsqueeze(0)
-        print(x.device, cos.device, self._rotate_half(x).device, sin.device)
-        return (x * cos) + (self._rotate_half(x) * sin)
+            return (x * cos) + (self._rotate_half(x) * sin)
