@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from papers.TransformerComponents.Encoder import Encoder
-from papers.TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
-from papers.TransformerComponents.UtilsLayers import *
+
+from papers.CommonTransformerComponents.Encoder import Encoder
+from papers.CommonTransformerComponents.Decoder import Decoder
+from papers.CommonTransformerComponents.BasePositionalEncoding import PositionalEmbedding
+from papers.CommonTransformerComponents.UtilsLayers import *
 
 class Transformer(nn.Module):
     def __init__(self, encoder: Encoder, decoder: Decoder, src_embedding: PositionalEmbedding, tgt_embedding: PositionalEmbedding, projection: Projection):

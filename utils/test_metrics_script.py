@@ -21,11 +21,11 @@ from utils.metrics import corpus_bleu
 #current_dir = os.path.dirname(os.path.abspath(__file__))
 #package_path = os.path.abspath(os.path.join(current_dir, "..", "papers", "attention_is_all_you_need"))
 #sys.path.insert(0, package_path)
-from papers.TransformerComponents.Encoder import Encoder
-from papers.TransformerComponents.Decoder import Decoder
-from papers.TransformerComponents.BasePositionalEncoding import PositionalEmbedding
-from papers.TransformerComponents.Transformer import Transformer
-from papers.TransformerComponents.UtilsLayers import Projection
+from papers.CommonTransformerComponents.Encoder import Encoder
+from papers.CommonTransformerComponents.Decoder import Decoder
+from papers.CommonTransformerComponents.BasePositionalEncoding import PositionalEmbedding
+from papers.CommonTransformerComponents.Transformer import Transformer
+from papers.CommonTransformerComponents.UtilsLayers import Projection
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
