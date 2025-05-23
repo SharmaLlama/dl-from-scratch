@@ -30,7 +30,7 @@ class RotaryEmbedding(nn.Module):
         if dim % 2 != 0:
             raise ValueError("dim must be even for 2‑D rotation pairs.")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        inv_freq = 1.0 / (base ** (torch.arange(0, dim // 2).float() / dim))
+        inv_freq = (1.0 / (base ** (torch.arange(0, dim // 2).float() / dim))).to(device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.max_seq_len = max_seq_len
         self.sin, self.cos = self.get_sin_cos(max_seq_len, device)
