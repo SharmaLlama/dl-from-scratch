@@ -49,8 +49,8 @@ class BaseMultiHeadAttention(nn.Module, ABC):
         query = query.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
         value = value.view(batch_size, seq_length, self.n_heads, self.dv).transpose(1, 2)
         key = key.view(batch_size, seq_length, self.n_heads, self.dk).transpose(1, 2)
-        key = key.view(batch_size, seq_length, self.n_heads // self.group_sizes, self.group_sizes, self.dk).mean(dim=3)
-        value = value.view(batch_size, seq_length, self.n_heads // self.group_sizes, self.group_sizes, self.dv).mean(dim=3)
+        key = key.view(batch_size, self.n_heads // self.group_sizes, seq_length,  self.group_sizes, self.dk).mean(dim=3)
+        value = value.view(batch_size, self.n_heads // self.group_sizes, seq_length, self.group_sizes, self.dv).mean(dim=3)
 
         # Call the attention pattern
         x, self.attention_scores, self.queries, self.keys = self.attention_pattern(
