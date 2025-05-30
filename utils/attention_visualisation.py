@@ -1,4 +1,5 @@
 import json
+import time
 from dash import Dash, html, dcc, Input, Output, State, callback_context
 import plotly.graph_objects as go
 import numpy as np
@@ -104,7 +105,7 @@ def run_attention_dashboard(attention_vals, tokens_in, tokens_out,
     app = Dash("head_view")
     dark_bg = 'black'
     text_color = 'white'
-    with open('../utils/assets/individual.css', 'r') as f:
+    with open('../../utils/assets/individual.css', 'r') as f:
         css_content = f.read()
     app.index_string = f'''
     <!DOCTYPE html>
@@ -273,6 +274,9 @@ def run_attention_dashboard(attention_vals, tokens_in, tokens_out,
     thread = Thread(target=run_app)
     thread.daemon = True
     thread.start()
+    time.sleep(2)  # Give the server time to start
+    return IFrame(f'http://localhost:{port}', width='100%', height=800)
+
     
 
 ########################################
@@ -320,7 +324,7 @@ def _create_attention_pattern(attention_weights, tokens_in, tokens_out, layer_id
 def run_model_dashboard(attention_data, tokens_in, tokens_out, port=8051, colormap='Viridis', height=800):
     app = dash.Dash("model_view", suppress_callback_exceptions=True)
     head_colors = _get_distinct_colors(attention_data.shape[1], colormap=colormap)
-    with open('../utils/assets/styles.css', 'r') as f:
+    with open('../../utils/assets/styles.css', 'r') as f:
         css_content = f.read()
     
     app.index_string = f'''
@@ -490,6 +494,9 @@ def run_model_dashboard(attention_data, tokens_in, tokens_out, port=8051, colorm
     thread = Thread(target=run_app)
     thread.daemon = True
     thread.start()
+    time.sleep(2)  # Give the server time to start
+    return IFrame(f'http://localhost:{port}', width='100%', height=800)
+
     
 
 ########################################
@@ -545,7 +552,7 @@ def _create_empty_figure(width=240, height=40):
     fig = go.Figure()
     fig.update_layout(
         width=width,
-        height=height,
+        height=800,
         margin=dict(l=0, t=0, b=0, r=0),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)', 
@@ -913,3 +920,5 @@ def run_neuron_dashboard(raw_attention, normalised_attention, query_data, key_da
     thread = Thread(target=run_app)
     thread.daemon = True
     thread.start()
+    time.sleep(2)  # Give the server time to start
+    return IFrame(f'http://localhost:{port}', width='100%', height=800)
