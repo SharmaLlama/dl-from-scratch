@@ -31,7 +31,7 @@ This file is found [here](./utils/ablation_studies.py).
 
 ### 3. Papers Implemented
 
-- **[Attention Is All You Need](./papers/attention_is_all_you_need/analysis.ipynb)**: Complete Transformer implementation with multi-head attention, positional encoding, and layer normalisation. [[Paper]](https://arxiv.org/abs/1706.03762)
+- **[Attention Is All You Need](./papers/attention_is_all_you_need/analysis.ipynb)**: Complete Transformer implementation with multi-head attention, positional encoding, and layer normalisation. Ablation studies also finished. [[Paper]](https://arxiv.org/abs/1706.03762)
 
 - **[MQA, GQA](./papers/attention_is_all_you_need/VanillaAttentionHead.py)**: Multi-Query Attention and Grouped Query Attention for improved efficiency. [[MQA Paper]](https://arxiv.org/abs/1911.02150) [[GQA Paper]](https://arxiv.org/abs/2305.13245)
 
@@ -49,7 +49,7 @@ Developed a custom attention visualisation library inspired by **BertViz** with 
 2. **Comparative analysis**: Side-by-side attention pattern comparison across different inputs
 3. **Multi-level visualisation**: Head-level, layer-level, and global attention patterns
 
-**Screenshots:**
+**Demo Images:**
 ![Head-level Analysis](./images/head_level.png)
 ![Global Patterns](./images/global_level.png)
 ![Detailed Attention](./images/detailed_attention.png)
