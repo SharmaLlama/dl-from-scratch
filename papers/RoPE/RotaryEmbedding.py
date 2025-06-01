@@ -34,11 +34,11 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("inv_freq", inv_freq)
 
         self.max_seq_len = max_seq_len
-        sin, cos = self.get_sin_cos(max_seq_len, device=None, dtype=inv_freq.dtype)
+        sin, cos = self._build_sin_cos(max_seq_len, device=None, dtype=inv_freq.dtype)
         self.register_buffer("sin", sin)
         self.register_buffer("cos", cos)
   
-    def get_sin_cos(self, seq_len, device= None, dtype= None):
+    def _build_sin_cos(self, seq_len, device= None, dtype= None):
         """
         Computes sine and cosine positional encodings for a given sequence length.
 
@@ -80,8 +80,7 @@ class RotaryEmbedding(nn.Module):
                                             dtype=x.dtype)
                 sin = sin[offset:offset + x.size(-2)]
                 cos = cos[offset:offset + x.size(-2)]
-
-            # unsqueeze to match batch dims…
+                
             while sin.dim() < x.dim():
                 sin = sin.unsqueeze(0)
                 cos = cos.unsqueeze(0)
