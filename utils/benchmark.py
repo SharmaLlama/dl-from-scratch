@@ -6,6 +6,14 @@ from typing import Dict, List, Tuple, Optional, Union
 import gc
 from dataclasses import dataclass
 from contextlib import contextmanager
+import os
+import pandas as pd
+from datetime import datetime
+import argparse
+from pathlib import Path
+from papers.CommonTransformerComponents.train_sp import build_model
+import yaml
+import sentencepiece as spm
 
 @dataclass
 class BenchmarkConfig:
@@ -59,13 +67,26 @@ class BenchmarkResults:
     tokens_per_second: float
     sentences_per_second: float
     # GPU utilisation (per GPU)
-    gpu_utilization_percent: Dict[str, float]
+    gpu_utilisation_percent: Dict[str, float]
     # Generation metrics (if applicable)
     generation_latency_ms: Optional[float] = None
     generation_tokens_per_second: Optional[float] = None
     # Multi-GPU specific
     num_gpus_used: int = 1
     model_parallel_type: str = "single"  # "single", "data_parallel", "distributed"
+    # Add timestamp and model info
+    model_path: Optional[str] = None
+    model_timestamp: Optional[str] = None
+    benchmark_timestamp: Optional[str] = None
+
+@dataclass
+class ModelInfo:
+    """Information about discovered models"""
+    model_type: str  # sparse, vanilla, rope
+    model_config: str  # configuration name
+    model_path: str  # full path to model file
+    model_name: str  # derived model name
+    file_timestamp: float  # file modification time
 
 class MultiGPUMemoryTracker:
     def __init__(self, devices: List[str]):
@@ -112,7 +133,7 @@ def multi_gpu_memory_context(devices: List[str]):
     try:
         yield tracker
     finally:
-        # Synchronize all CUDA devices
+        # Synchronise all CUDA devices
         for device in devices:
             if device.startswith("cuda") and torch.cuda.is_available():
                 torch.cuda.synchronize(device)
@@ -123,8 +144,142 @@ class MultiGPUTransformerBenchmarker:
         self.devices = config.available_devices
         self.primary_device = self.devices[0]
         
-        print(f"Initializing benchmarker with devices: {self.devices}")
+        print(f"Initialising benchmarker with devices: {self.devices}")
         
+    def discover_models(self, base_path: str) -> List[ModelInfo]:
+        """
+        Discover models in the folder structure: ../Model/model_type/model_config/Model_{x}
+        
+        Args:
+            base_path: Path to the Model directory (e.g., "../Model")
+        
+        Returns:
+            List of ModelInfo objects
+        """
+        models = []
+        model_types = ["sparse", "vanilla", "rope"]
+        model_number = {"sparse" : 100, "vanilla" : 100, "rope" : 100}
+        base_path = Path(base_path)
+        
+        for model_type in model_types:
+            model_type_path = base_path / model_type
+            if not model_type_path.exists():
+                print(f"Warning: {model_type_path} does not exist")
+                continue
+                
+            # Find all config directories
+            for config_dir in model_type_path.iterdir():
+                if config_dir.is_dir():
+                    model_file = config_dir / f"Model_{model_number[model_type]}"
+                    
+                    if model_file.exists():
+                        # Extract model configuration from filename/path
+                        model_name = f"{model_type}_{config_dir.name}_Model_{model_number[model_type]}"
+                        
+                        model_info = ModelInfo(
+                            model_type=model_type,
+                            model_config=config_dir.name,
+                            model_path=str(model_file),
+                            model_name=model_name,
+                            file_timestamp=model_file.stat().st_mtime
+                        )
+                        models.append(model_info)
+                        print(f"Found model: {model_name} at {model_file}")
+                    else:
+                        print(f"Model file not found: {model_file}")
+        
+        return models
+    
+    def load_existing_results(self, csv_path: str) -> pd.DataFrame:
+        """Load existing benchmark results from CSV if it exists"""
+        if os.path.exists(csv_path):
+            try:
+                return pd.read_csv(csv_path)
+            except Exception as e:
+                print(f"Warning: Could not load existing results from {csv_path}: {e}")
+                return pd.DataFrame()
+        return pd.DataFrame()
+    
+    def needs_benchmarking(self, model_info: ModelInfo, existing_results: pd.DataFrame) -> bool:
+        """
+        Check if a model needs benchmarking based on timestamps
+        
+        Args:
+            model_info: Information about the model
+            existing_results: DataFrame with existing benchmark results
+        
+        Returns:
+            True if benchmarking is needed, False otherwise
+        """
+        if existing_results.empty:
+            return True
+        
+        # Check if this model exists in results
+        model_results = existing_results[existing_results['model_name'] == model_info.model_name]
+        
+        if model_results.empty:
+            return True
+        
+        # Check if model file is newer than last benchmark
+        if 'model_timestamp' in model_results.columns:
+            last_model_timestamp = model_results['model_timestamp'].iloc[0]
+            try:
+                last_timestamp = float(last_model_timestamp)
+                if model_info.file_timestamp > last_timestamp:
+                    print(f"Model {model_info.model_name} has been updated since last benchmark")
+                    return True
+                else:
+                    print(f"Model {model_info.model_name} is up to date, skipping benchmark")
+                    return False
+            except (ValueError, TypeError):
+                # If timestamp parsing fails, re-benchmark
+                return True
+        
+        return True
+    
+    def load_model_from_path(self, model_info: ModelInfo, sp, device) -> nn.Module:
+        """
+        Load a model from the given path and configuration
+        
+        Args:
+            model_info: Information about the model to load
+            sp: SentencePiece processor
+            device: Target device
+        
+        Returns:
+            Loaded model
+        """
+        # Determine config path based on model type
+        config_paths = {
+            "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
+            "vanilla": "dl-from-scratch/papers/attention_is_all_you_need/config.yaml",
+            "rope": "dl-from-scratch/papers/RoPE/config.yaml"
+        }
+        
+        yaml_path = config_paths.get(model_info.model_type)
+        if not yaml_path:
+            raise ValueError(f"Unknown model type: {model_info.model_type}")
+        
+        with open(yaml_path, "r") as file:
+            config = yaml.safe_load(file)
+        
+        # Load checkpoint
+        checkpoint = torch.load(model_info.model_path, map_location=device)
+        
+        # Parse model configuration from path/filename
+        config_parts = model_info.model_config.split("_")
+        if len(config_parts) >= 5:
+            config['N_HEADS'] = int(config_parts[2])
+            config['D_MODEL'] = int(config_parts[3])
+            config['FF_HIDDEN'] = int(config_parts[4])
+            config['N_ENCODERS'] = int(config_parts[5])
+            config['N_DECODERS'] = int(config_parts[6])
+        
+        model = build_model(sp, device, config, model_info.model_type, 
+                          checkpoint.get('model_state_dict'))
+        
+        return model
+    
     def detect_model_parallelism(self, model: nn.Module) -> Tuple[str, List[str]]:
         """Detect what type of parallelism the model uses"""
         model_devices = []
@@ -168,7 +323,7 @@ class MultiGPUTransformerBenchmarker:
                                        device=device),
         }
         
-    def measure_multi_gpu_utilization(self) -> Dict[str, float]:
+    def measure_multi_gpu_utilisation(self) -> Dict[str, float]:
         """Measure GPU utilisation across all available GPUs"""
         utilisation = {}
         try:
@@ -209,7 +364,7 @@ class MultiGPUTransformerBenchmarker:
         return model
     
     def benchmark_forward_pass(self, model: nn.Module, batch_size: int, 
-                             seq_length: int) -> BenchmarkResults:
+                             seq_length: int, model_info: ModelInfo = None) -> BenchmarkResults:
         """Benchmark a single forward pass with multi-GPU support"""
         model.eval()
         
@@ -217,7 +372,6 @@ class MultiGPUTransformerBenchmarker:
         parallel_type, model_devices = self.detect_model_parallelism(model)
         print(f"Model parallel type: {parallel_type}, devices: {model_devices}")
         
-        # Determine input device (primary device for the model)
         input_device = model_devices[0] if model_devices else self.primary_device
         
         # Warmup runs
@@ -226,14 +380,14 @@ class MultiGPUTransformerBenchmarker:
                 inputs = self.create_random_inputs(batch_size, seq_length, input_device)
                 _ = model(**inputs)
         
-        # Synchronize all devices
+        # Synchronise all devices
         for device in self.devices:
             if device.startswith("cuda") and torch.cuda.is_available():
                 torch.cuda.synchronize(device)
         
         # Benchmark runs
         latencies = []
-        gpu_utilizations = []
+        gpu_utilisations = []
         
         with multi_gpu_memory_context(self.devices) as mem_tracker:
             for _ in range(self.config.num_benchmark_runs):
@@ -247,7 +401,7 @@ class MultiGPUTransformerBenchmarker:
                 with torch.inference_mode():
                     outputs = model(encoder_input, tgt_input, encoder_mask=encoder_mask, decoder_mask=decoder_mask)
                 
-                # Synchronize all devices
+                # Synchronise all devices
                 for device in self.devices:
                     if device.startswith("cuda") and torch.cuda.is_available():
                         torch.cuda.synchronize(device)
@@ -255,7 +409,7 @@ class MultiGPUTransformerBenchmarker:
                 end_time = time.perf_counter()
                 latency_ms = (end_time - start_time) * 1000
                 latencies.append(latency_ms)
-                gpu_utilizations.append(self.measure_multi_gpu_utilization())
+                gpu_utilisations.append(self.measure_multi_gpu_utilisation())
             
             peak_memory_per_gpu = mem_tracker.get_peak_memory()
             total_memory = mem_tracker.get_total_memory()
@@ -268,11 +422,11 @@ class MultiGPUTransformerBenchmarker:
         avg_gpu_util = {}
         for device in self.devices:
             if device.startswith("cuda"):
-                device_utils = [util.get(device, 0) for util in gpu_utilizations]
+                device_utils = [util.get(device, 0) for util in gpu_utilisations]
                 avg_gpu_util[device] = np.mean(device_utils)
         
         return BenchmarkResults(
-            model_name=model.__class__.__name__,
+            model_name=model_info.model_name if model_info else model.__class__.__name__,
             batch_size=batch_size,
             seq_length=seq_length,
             total_memory_mb=total_memory,
@@ -282,15 +436,16 @@ class MultiGPUTransformerBenchmarker:
             latency_per_token_ms=avg_latency / total_tokens,
             tokens_per_second=total_tokens * 1000 / avg_latency,
             sentences_per_second=batch_size * 1000 / avg_latency,
-            gpu_utilization_percent=avg_gpu_util,
+            gpu_utilisation_percent=avg_gpu_util,
             num_gpus_used=len([d for d in model_devices if d.startswith("cuda")]),
-            model_parallel_type=parallel_type
+            model_parallel_type=parallel_type,
+            model_path=model_info.model_path if model_info else None,
+            model_timestamp=str(model_info.file_timestamp) if model_info else None,
+            benchmark_timestamp=datetime.now().isoformat()
         )
     
-   
-    
     def benchmark_model(self, model: nn.Module, model_name: str = None, 
-                       auto_parallelise: bool = True) -> List[BenchmarkResults]:
+                       auto_parallelise: bool = True, model_info: ModelInfo = None) -> List[BenchmarkResults]:
         """Run comprehensive benchmark on a model with multi-GPU support"""
         if model_name is None:
             model_name = model.__class__.__name__
@@ -302,20 +457,17 @@ class MultiGPUTransformerBenchmarker:
         
         print(f"Benchmarking {model_name}...")
         parallel_type, model_devices = self.detect_model_parallelism(model)
-        print(f"  Model configuration: {parallel_type} on devices {model_devices}")
         
         for batch_size in self.config.batch_sizes:
-            for seq_length in self.config.sequence_lengths:
-                print(f"  Testing batch_size={batch_size}, seq_length={seq_length}")
-                
+            for seq_length in self.config.sequence_lengths:                
                 try:
-                    result = self.benchmark_forward_pass(model, batch_size, seq_length)
+                    result = self.benchmark_forward_pass(model, batch_size, seq_length, model_info)
                     result.model_name = model_name
                     results.append(result)
                     
                 except RuntimeError as e:
                     if "out of memory" in str(e).lower():
-                        print(f"    OOM at batch_size={batch_size}, seq_length={seq_length}")
+                        print(f"OOM at batch_size={batch_size}, seq_length={seq_length}")
                         # Clear memory on all GPUs
                         for device in self.devices:
                             if device.startswith("cuda") and torch.cuda.is_available():
@@ -332,19 +484,15 @@ class MultiGPUTransformerBenchmarker:
         
         return results
     
-    def compare_models(self, models: Dict[str, nn.Module], 
-                      auto_parallelise: bool = True) -> Dict[str, List[BenchmarkResults]]:
-        """Compare multiple models with multi-GPU support"""
-        all_results = {}
+    def export_results_to_csv(self, results: Dict[str, List[BenchmarkResults]], filename: str, append: bool = True):
+        """
+        Export results to CSV with multi-GPU information
         
-        for model_name, model in models.items():
-            all_results[model_name] = self.benchmark_model(model, model_name, auto_parallelise)
-        
-        return all_results
-    
-    def export_results_to_csv(self, results: Dict[str, List[BenchmarkResults]]):
-        """Export results to CSV with multi-GPU information"""
-        
+        Args:
+            results: Dictionary of model results
+            filename: Output CSV filename
+            append: If True, append to existing file; if False, overwrite
+        """
         rows = []
         for model_name, model_results in results.items():
             for result in model_results:
@@ -361,7 +509,10 @@ class MultiGPUTransformerBenchmarker:
                     'generation_latency_ms': result.generation_latency_ms,
                     'generation_tokens_per_second': result.generation_tokens_per_second,
                     'num_gpus_used': result.num_gpus_used,
-                    'model_parallel_type': result.model_parallel_type
+                    'model_parallel_type': result.model_parallel_type,
+                    'model_path': result.model_path,
+                    'model_timestamp': result.model_timestamp,
+                    'benchmark_timestamp': result.benchmark_timestamp
                 }
                 
                 # Add per-GPU memory usage
@@ -369,12 +520,110 @@ class MultiGPUTransformerBenchmarker:
                     row[f'memory_{device}_mb'] = memory
                 
                 # Add per-GPU utilisation
-                for device, util in result.gpu_utilization_percent.items():
-                    row[f'utilization_{device}_percent'] = util
+                for device, util in result.gpu_utilisation_percent.items():
+                    row[f'utilisation_{device}_percent'] = util
                 
                 rows.append(row)
-        print(rows)
-        # df = pd.DataFrame(rows)
-        # print(df)
-        # df.to_csv(filename, index=False)
-        # print(f"Results exported to {filename}")
+        
+        new_df = pd.DataFrame(rows)
+        
+        if append and os.path.exists(filename):
+            try:
+                # Load existing data
+                existing_df = pd.read_csv(filename)
+                
+                # Remove old results for models that were re-benchmarked
+                models_updated = set(new_df['model_name'].unique())
+                existing_df = existing_df[~existing_df['model_name'].isin(models_updated)]
+                
+                # Combine old and new results
+                combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+                combined_df.to_csv(filename, index=False)
+                print(f"Results appended to {filename}")
+            except Exception as e:
+                print(f"Error appending to existing file: {e}")
+                new_df.to_csv(filename, index=False)
+                print(f"Results saved to new file {filename}")
+        else:
+            new_df.to_csv(filename, index=False)
+            print(f"Results exported to {filename}")
+    
+    def benchmark_all_models(self, base_model_path: str, csv_output_path: str, sp, device):
+        """
+        Discover and benchmark all models in the directory structure
+        
+        Args:
+            base_model_path: Path to the Model directory
+            csv_output_path: Path to output CSV file
+            sp: SentencePiece processor
+            device: Device to use for computation
+        """
+        models = self.discover_models(base_model_path)
+        print(f"Discovered {len(models)} models")
+        existing_results = self.load_existing_results(csv_output_path)
+        all_results = {}
+        
+        for model_info in models:
+            try:
+                # Check if benchmarking is needed
+                if not self.needs_benchmarking(model_info, existing_results):
+                    continue
+                
+                print(f"\nBenchmarking {model_info.model_name}...")
+                model = self.load_model_from_path(model_info, sp, device)
+                results = self.benchmark_model(model, model_info.model_name, 
+                                             auto_parallelise=True, model_info=model_info)
+                
+                all_results[model_info.model_name] = results
+                
+                del model
+                for device_name in self.devices:
+                    if device_name.startswith("cuda") and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                gc.collect()
+                
+            except Exception as e:
+                print(f"Error benchmarking {model_info.model_name}: {e}")
+                continue
+        
+        if all_results:
+            self.export_results_to_csv(all_results, csv_output_path, append=True)
+        else:
+            print("No models needed benchmarking")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Transformer Inferencing Script")
+    parser.add_argument("--model_file", type=str, required=True, 
+                       help="Path to SentencePiece model file")
+    parser.add_argument("--model_base_path", type=str, required=True,
+                       help="Base path to model directory (e.g., '../Model')")
+    parser.add_argument("--output_csv", type=str, required=True,
+                       help="Path to output CSV file")
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    args = parser.parse_args()
+    
+    # Load SentencePiece processor
+    sp = spm.SentencePieceProcessor(model_file=args.model_file)
+    
+    # Configure benchmarker
+    config = BenchmarkConfig(
+        batch_sizes=[64, 128, 256, 512, 1024],
+        sequence_lengths=[140, 200, 500, 1000, 2000],
+        num_warmup_runs=10,
+        num_benchmark_runs=100,
+        vocab_size=sp.vocab_size(),
+        device=device
+    )
+    
+    benchmarker = MultiGPUTransformerBenchmarker(config)
+    print(f"Available devices: {benchmarker.devices}")
+    print(f"Primary device: {benchmarker.primary_device}")
+    print("Starting comprehensive benchmarks for all discovered models...")
+    benchmarker.benchmark_all_models(
+        base_model_path=args.model_base_path,
+        csv_output_path=args.output_csv,
+        sp=sp,
+        device=device
+    )
