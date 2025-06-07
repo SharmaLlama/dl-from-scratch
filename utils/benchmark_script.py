@@ -37,15 +37,13 @@ if __name__ == "__main__":
         sequence_lengths=[140, 200, 500, 1000, 2000],
         num_warmup_runs=10,
         num_benchmark_runs=100,
-        vocab_size=8000,
+        vocab_size=sp.vocab_size(),
         device="cuda"  
     )
 
     benchmarker = MultiGPUTransformerBenchmarker(config)
     print(f"Available devices: {benchmarker.devices}")
     print(f"Primary device: {benchmarker.primary_device}")
-
-
 
 
     print("Starting comprehensive benchmarks...")
