@@ -603,11 +603,7 @@ if __name__ == "__main__":
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-    
-    # Load SentencePiece processor
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
-    
-    # Configure benchmarker
     config = BenchmarkConfig(
         batch_sizes=[64, 128, 256, 512, 1024],
         sequence_lengths=[140, 200, 500, 1000, 2000],
