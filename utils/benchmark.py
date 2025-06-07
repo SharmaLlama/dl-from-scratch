@@ -370,7 +370,6 @@ class MultiGPUTransformerBenchmarker:
         
         # Detect model configuration
         parallel_type, model_devices = self.detect_model_parallelism(model)
-        print(f"Model parallel type: {parallel_type}, devices: {model_devices}")
         
         input_device = model_devices[0] if model_devices else self.primary_device
         
@@ -455,7 +454,6 @@ class MultiGPUTransformerBenchmarker:
         
         results = []
         
-        print(f"Benchmarking {model_name}...")
         parallel_type, model_devices = self.detect_model_parallelism(model)
         
         for batch_size in self.config.batch_sizes:
