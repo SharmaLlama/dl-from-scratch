@@ -55,5 +55,5 @@ if __name__ == "__main__":
 
 
     print("Starting comprehensive benchmarks...")
-    results = benchmarker.benchmark_model(model, model_name=splat.join("_"))
-    benchmarker.export_results_to_csv({f"{splat.join('_')}" :results})
+    results = benchmarker.benchmark_model(model, model_name="_".join(splat))
+    benchmarker.export_results_to_csv({f"{'_'.join(splat)}" :results})
