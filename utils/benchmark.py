@@ -610,7 +610,7 @@ if __name__ == "__main__":
         num_warmup_runs=10,
         num_benchmark_runs=100,
         vocab_size=sp.vocab_size(),
-        device=device
+        device="cuda" if torch.cuda.is_available() else "cpu"
     )
     
     benchmarker = MultiGPUTransformerBenchmarker(config)
