@@ -29,6 +29,14 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
 
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
+
+
+    splat = args.llm_model_file.split("/")[6].split("_")
+    config['N_HEADS'] = int(splat[2])
+    config['D_MODEL'] = int(splat[3])
+    config['FF_HIDDEN'] = int(splat[4])
+    config['N_ENCODERS'] = int(splat[5])
+    config['N_DECODERS'] = int(splat[6])
     model = build_model(sp, device, config, args.attention_type, checkpoint['model_state_dict'])
 
 
@@ -47,5 +55,5 @@ if __name__ == "__main__":
 
 
     print("Starting comprehensive benchmarks...")
-    results = benchmarker.benchmark_model(model, auto_parallelize=True)
-    benchmarker.export_results_to_csv({f"{args.llm_model_file}" :results})
+    results = benchmarker.benchmark_model(model, model_name=splat.join("_"))
+    benchmarker.export_results_to_csv({f"{splat.join("_")}" :results})
