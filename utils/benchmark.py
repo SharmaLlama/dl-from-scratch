@@ -268,12 +268,22 @@ class MultiGPUTransformerBenchmarker:
         
         # Parse model configuration from path/filename
         config_parts = model_info.model_config.split("_")
-        if len(config_parts) >= 5:
+        if len(config_parts) == 7:
             config['N_HEADS'] = int(config_parts[2])
             config['D_MODEL'] = int(config_parts[3])
             config['FF_HIDDEN'] = int(config_parts[4])
             config['N_ENCODERS'] = int(config_parts[5])
             config['N_DECODERS'] = int(config_parts[6])
+        elif len(config_parts) == 10:
+            config['N_HEADS'] = int(config_parts[2])
+            config['D_MODEL'] = int(config_parts[3])
+            config['FF_HIDDEN'] = int(config_parts[4])
+            config['N_ENCODERS'] = int(config_parts[5])
+            config['N_DECODERS'] = int(config_parts[6])
+            config['GLOBAL_ATTENTION'] = int(config_parts[7])
+            config['LOCAL_ATTENTION'] = int(config_parts[8])
+            config['RANDOM_ATTENTION'] = int(config_parts[9])
+
         
         model = build_model(sp, device, config, model_info.model_type, 
                           checkpoint.get('model_state_dict'))
