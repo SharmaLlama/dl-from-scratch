@@ -615,8 +615,8 @@ if __name__ == "__main__":
     config = BenchmarkConfig(
         batch_sizes=[64, 128, 256, 512, 1024],
         sequence_lengths=[140, 200, 500, 1000, 2000],
-        num_warmup_runs=10,
-        num_benchmark_runs=100,
+        num_warmup_runs=1,
+        num_benchmark_runs=2,
         vocab_size=sp.vocab_size(),
         device="cuda" if torch.cuda.is_available() else "cpu"
     )
