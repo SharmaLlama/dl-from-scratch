@@ -224,13 +224,13 @@ def train(model, sp, train_dataloader, test_dataloader, device, warmup_steps, co
                 optimiser.optimiser.zero_grad()
             else:
                 optimiser.zero_grad()
-            
+
             loss.backward()
             optimiser.step()
 
         train_metrics.append((batch_loss / total_tokens, np.exp(batch_loss / total_tokens), 
                               batch_correct / total_tokens * 100))
-
+        
         model.eval()
         val_loss = 0
         total_tokens = 0
@@ -314,7 +314,6 @@ if __name__ == "__main__":
         YAML_PATH = f"dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
     elif args.attention_type == "rope":
         YAML_PATH = f"dl-from-scratch/papers/RoPE/config.yaml"
-
 
     with open(YAML_PATH, "r") as file:
         config = yaml.safe_load(file)

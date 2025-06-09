@@ -269,14 +269,12 @@ class MultiGPUTransformerBenchmarker:
         # Parse model configuration from path/filename
         config_parts = model_info.model_config.split("_")
         if len(config_parts) == 7:
-            print(config_parts)
             config['N_HEADS'] = int(config_parts[2])
             config['D_MODEL'] = int(config_parts[3])
             config['FF_HIDDEN'] = int(config_parts[4])
             config['N_ENCODERS'] = int(config_parts[5])
             config['N_DECODERS'] = int(config_parts[6])
         elif len(config_parts) == 10:
-            print(config_parts)
             config['N_HEADS'] = int(config_parts[2])
             config['D_MODEL'] = int(config_parts[3])
             config['FF_HIDDEN'] = int(config_parts[4])
@@ -478,6 +476,27 @@ class MultiGPUTransformerBenchmarker:
                 except RuntimeError as e:
                     if "out of memory" in str(e).lower():
                         print(f"OOM at batch_size={batch_size}, seq_length={seq_length}")
+
+                        result = BenchmarkResults(
+                            model_name=model_name,
+                            batch_size=batch_size,
+                            seq_length=seq_length,
+                            total_memory_mb=None,
+                            memory_per_gpu_mb=None,
+                            memory_per_token_mb=None,
+                            avg_latency_ms=None,
+                            latency_per_token_ms=None,
+                            tokens_per_second=None,
+                            sentences_per_second=None,
+                            gpu_utilisation_percent=None,
+                            num_gpus_used=len([d for d in model_devices if d.startswith("cuda")]),
+                            model_parallel_type=parallel_type,
+                            model_path=model_info.model_path if model_info else None,
+                            model_timestamp=str(model_info.file_timestamp) if model_info else None,
+                            benchmark_timestamp=datetime.now().isoformat()
+                        )
+                        results.append(result)
+
                         # Clear memory on all GPUs
                         for device in self.devices:
                             if device.startswith("cuda") and torch.cuda.is_available():
