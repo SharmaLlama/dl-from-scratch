@@ -69,7 +69,7 @@ if __name__ == "__main__":
     english_encoded, hindi_encoded, ref_sentences = get_encodings(args.dataset, args.model_file, skiprows=550_000,
                                                                   nrows=args.amount)
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
-    model_types = ["sparse"] #, "vanilla", "rope"]
+    model_types = ["sparse", "rope"] #, "vanilla", "rope"]
     base_path = Path(args.llm_folder_path)
     for model_type in model_types:
         model_type_path = base_path / model_type
