@@ -6,7 +6,7 @@ import random
 import torch.nn.functional as F
 import argparse
 from sacrebleu.metrics import BLEU
-from papers.CommonTransformerComponents.train_sp import load_model, get_dataloaders, get_data
+from papers.CommonTransformerComponents.train_sp import load_model, get_dataloaders, get_encodings
 
 seed = 42
 random.seed(seed)
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     bleu = BLEU(tokenize="intl")
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
-    english_encoded, hindi_encoded, ref_sentences = get_data(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
+    english_encoded, hindi_encoded, ref_sentences = get_encodings(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, 512) # fixed batch size here
 
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
