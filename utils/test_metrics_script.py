@@ -68,7 +68,6 @@ if __name__ == "__main__":
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
     english_encoded, hindi_encoded, ref_sentences = get_encodings(args.dataset, args.model_file, skiprows=550_000,
                                                                   nrows=args.amount)
-    dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, 512) # fixed batch size here
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
     model_types = ["sparse"] #, "vanilla", "rope"]
     base_path = Path(args.llm_folder_path)
@@ -80,6 +79,7 @@ if __name__ == "__main__":
                 if model_file.exists():
                     model_name = f"{model_type}_{config_dir.name}_Model_{model_number[model_type]}"
                     model, config, _ = load_model(model_file, device, model_type=model_type)
+                    dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
                     model.eval()
                     bleu_score = get_bleu_score(model, dataloader, sp, device, config)
                     print(f"Model: {config_dir.name}, BLEU Score: {bleu_score:.4f}")
