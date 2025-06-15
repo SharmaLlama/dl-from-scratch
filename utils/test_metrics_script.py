@@ -70,7 +70,7 @@ if __name__ == "__main__":
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, 512) # fixed batch size here
 
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
-    model_types = ["sparse", "vanilla", "rope"]
+    model_types = ["sparse"] #, "vanilla", "rope"]
     base_path = Path(args.llm_folder_path)
     for model_type in model_types:
         model_type_path = base_path / model_type
