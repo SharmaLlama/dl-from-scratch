@@ -131,7 +131,7 @@ def build_model(sp, device, config, attention_type, state_dict=None):
         model.initialise() 
     return model
 
-def load_model(model_path, device, model_type="vanilla"):
+def load_model(model_path, device, sp, model_type="vanilla"):
         # Determine config path based on model type
         config_paths = {
             "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument("--attention_type", type=str, required=False, default="vanilla")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-    model, config, checkpoint = load_model(args.llm_model_file, device, model_type=args.attention_type)
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
+    model, config, checkpoint = load_model(args.llm_model_file, device, sp, model_type=args.attention_type)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
     train(model,sp, train_dataloader, test_dataloader, device, args.warmup, config, args.attention_type, checkpoint['optimiser_state_dict'])
