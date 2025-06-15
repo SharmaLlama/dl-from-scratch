@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 if model_file.exists():
                     model_name = f"{model_type}_{config_dir.name}_Model_{model_number[model_type]}"
                     model, config, _ = load_model(model_file, device, sp, model_type=model_type)
-                    config['TRAIN_RATIO'] = 0.99999
+                    config['TRAIN_RATIO'] = 0.999
                     dataloader, _ = get_dataloaders(sp, english_encoded, hindi_encoded, config)
                     model.eval()
                     bleu_score = get_bleu_score(model, dataloader, sp, device, config)
