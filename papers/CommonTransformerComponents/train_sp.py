@@ -79,9 +79,9 @@ class LanguageTranslationDataset(Dataset):
             return len(self.paired_encodings)
         
 
-def get_encodings(datapath, model_file, nrows=550_000):
-    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, nrows=nrows)
-    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, nrows=nrows)
+def get_encodings(datapath, model_file, nrows=550_000, skiprows=0):
+    english_sentences = pd.read_table(Path(datapath) /  "english_small.txt",  header=None, nrows=nrows, skiprows=skiprows)
+    hindi_sentences = pd.read_table(Path(datapath) /  "hindi_small.txt",  header=None, nrows=nrows, skiprows=skiprows)
     sp = spm.SentencePieceProcessor(model_file=model_file)
     english_encoded = sp.encode_as_ids(english_sentences.iloc[:, 0].to_list())
     hindi_encoded = sp.encode_as_ids(hindi_sentences.iloc[:, 0].to_list())

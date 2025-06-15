@@ -66,9 +66,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     bleu = BLEU(tokenize="intl")
     sp = spm.SentencePieceProcessor(model_file=args.model_file)
-    english_encoded, hindi_encoded, ref_sentences = get_encodings(args.dataset, skiprows=550_000, amount=args.amount, sp=sp)
+    english_encoded, hindi_encoded, ref_sentences = get_encodings(args.dataset, args.model_file, skiprows=550_000,
+                                                                  nrows=args.amount)
     dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, 512) # fixed batch size here
-
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
     model_types = ["sparse"] #, "vanilla", "rope"]
     base_path = Path(args.llm_folder_path)
