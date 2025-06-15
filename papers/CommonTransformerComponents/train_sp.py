@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset, random_split
@@ -124,7 +125,11 @@ def build_model(sp, device, config, attention_type, state_dict=None):
         model = torch.nn.DataParallel(model)
     
     if state_dict is not None:
-        model.load_state_dict(state_dict)
+        if torch.cuda.device_count() > 1:
+            model.load_state_dict(state_dict)
+        else: 
+            state_dict = OrderedDict((k.replace("module.", ""), v) for k, v in state_dict.items())
+            model.load_state_dict(state_dict)
     elif torch.cuda.device_count() > 1:
         model.module.initialise()
     else: 
