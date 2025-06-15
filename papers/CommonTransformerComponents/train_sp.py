@@ -150,13 +150,13 @@ def load_model(model_path, device, model_type="vanilla"):
         
         # Parse model configuration from path/filename
         config_parts = model_path.name.split("_")
-        if len(config_parts) == 7:
+        if 7<= len(config_parts) <= 8:
             config['N_HEADS'] = int(config_parts[2])
             config['D_MODEL'] = int(config_parts[3])
             config['FF_HIDDEN'] = int(config_parts[4])
             config['N_ENCODERS'] = int(config_parts[5])
             config['N_DECODERS'] = int(config_parts[6])
-        elif len(config_parts) == 10:
+        elif 10 <= len(config_parts) <= 11:
             config['N_HEADS'] = int(config_parts[2])
             config['D_MODEL'] = int(config_parts[3])
             config['FF_HIDDEN'] = int(config_parts[4])
