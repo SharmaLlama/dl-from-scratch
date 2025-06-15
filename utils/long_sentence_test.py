@@ -173,7 +173,7 @@ if __name__ == "__main__":
                 
                 if model_file.exists():
                     model_name = f"{model_type}_{config_dir.name}_Model_{model_number[model_type]}"
-                    model, config, _ = load_model(model_file, device, model_type=model_type)
+                    model, config, _ = load_model(model_file, device, sp.vocab_size(), model_type=model_type)
                     model.eval()
                     for binned, pairs in bucketed_sentences.items():
                         if pairs == "2000+": 

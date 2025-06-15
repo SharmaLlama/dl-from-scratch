@@ -98,9 +98,7 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, config):
 
     return train_dataloader, test_dataloader
 
-def build_model(sp, device, config, attention_type, state_dict=None):
-    vocab_size = sp.vocab_size()
-
+def build_model(vocab_size, device, config, attention_type, state_dict=None):
     # Prepare kwargs for sparse attention if needed
     attention_kwargs = {}
     if attention_type == 'sparse':
@@ -136,7 +134,7 @@ def build_model(sp, device, config, attention_type, state_dict=None):
         model.initialise() 
     return model
 
-def load_model(model_path, device, sp, model_type="vanilla"):
+def load_model(model_path, device, vocab_size, model_type="vanilla"):
         # Determine config path based on model type
         config_paths = {
             "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
@@ -171,7 +169,7 @@ def load_model(model_path, device, sp, model_type="vanilla"):
             config['LOCAL_ATTENTION'] = int(config_parts[8])
             config['RANDOM_ATTENTION'] = int(config_parts[9])
 
-        model = build_model(sp, device, config, model_type, 
+        model = build_model(vocab_size, device, config, model_type, 
                           checkpoint.get('model_state_dict'))
         return model, config, checkpoint
 
@@ -347,6 +345,6 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
-    model, config, checkpoint = load_model(args.llm_model_file, device, sp, model_type=args.attention_type)
+    model, config, checkpoint = load_model(args.llm_model_file, device, sp.vocab_size(), model_type=args.attention_type)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
     train(model,sp, train_dataloader, test_dataloader, device, args.warmup, config, args.attention_type, checkpoint['optimiser_state_dict'])
