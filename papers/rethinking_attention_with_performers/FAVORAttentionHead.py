@@ -12,21 +12,20 @@ class FAVORMultiHeadAttention(BaseMultiHeadAttention):
         self.m_features = m_features
         self.kernel_type = kernel_type
         self.use_orthogonal = use_orthogonal
-        self.omegas = self._create_random_projections()
-        self.register_buffer('omegas', self.omegas)
+        self.register_buffer('omegas', self._create_random_projections())
 
     def _create_random_projections(self):
         """Create random projection matrices for each head"""
         if self.use_orthogonal:
             # Stack orthogonal matrices for each head
             omegas_list = []
-            for _ in range(self.num_heads):
-                omega = self._orthogonal_gaussian(self.m_features, self.d_head)
+            for _ in range(self.n_heads):
+                omega = self._orthogonal_gaussian(self.m_features, self.dk)
                 omegas_list.append(omega)
             return torch.stack(omegas_list, dim=0)  # (num_heads, m_features, d_head)
         else:
             # IID Gaussian for each head
-            return torch.randn(self.num_heads, self.m_features, self.d_head)
+            return torch.randn(self.n_heads, self.m_features, self.dk)
         
     def _orthogonal_gaussian(self, m, d):
         """Generate orthogonal random matrix for one head"""
@@ -110,8 +109,8 @@ class FAVORMultiHeadAttention(BaseMultiHeadAttention):
         key_scaled_input = K / (d_head ** 0.25)
 
         # Compute random features for Q and K
-        new_query = self._random_feature_map(query_scaled_input, self.omegas, self.kernel_type) # (B, H, L, feature_dim)
-        new_key = self._random_feature_map(key_scaled_input, self.omegas, self.kernel_type)     # (B, H, L, feature_dim)
+        new_query = self._random_feature_map(query_scaled_input, self.omegas) # (B, H, L, feature_dim)
+        new_key = self._random_feature_map(key_scaled_input, self.omegas)     # (B, H, L, feature_dim)
 
         ones_tensor = torch.ones(B, H, L, 1, device=Q.device)
         C = torch.cat([V, ones_tensor], dim=-1)  # (B, H, L, d_head + 1)
@@ -132,10 +131,11 @@ class FAVORMultiHeadAttention(BaseMultiHeadAttention):
             buf_4 = buf_2[..., -1]   # (B, H, L) - normalisation terms
             ans = buf_3 / (buf_4.unsqueeze(-1) + 1e-6)  # (B, H, L, d_head)
             if return_attention:
-                return ans, None, new_query, new_key ## TODO: what is the attention values here?
+                attention_vals = torch.einsum("bhlf,bhLf->bhlL", new_query, new_key)
+                return ans, attention_vals / (buf_4.unsqueeze(-1) + 1e-6), new_query, new_key
             else:
                 return ans, None, None, None
-        else:
+        else: # this is for upper-triangular mask only
             # Unidirectional attention with prefix sum
             # G_temp: (B, H, L, feature_dim, d_head + 1)
             G_temp = torch.einsum('bhlf,bhld->bhlfd', new_key, C)
@@ -153,6 +153,7 @@ class FAVORMultiHeadAttention(BaseMultiHeadAttention):
             ans = buf_3 / (buf_4.unsqueeze(-1) + 1e-6) # (B, H, L, d_head)
             
             if return_attention:
-                return ans, None, new_query, new_key
+                attention_vals = torch.einsum("bhlf,bhLf->bhlL", new_query, new_key)
+                return ans, G, new_query, new_key
             else:
                 return ans, None, None, None

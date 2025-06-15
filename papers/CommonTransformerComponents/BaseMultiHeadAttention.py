@@ -29,6 +29,7 @@ class BaseMultiHeadAttention(nn.Module, ABC):
         self.w_o = nn.Linear(n_heads * dv, d_model, bias=False)
         self.dk = dk
         self.dv = dv
+        self.d_model = d_model
         self.group_sizes = group_sizes
         
     @abstractmethod

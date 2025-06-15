@@ -131,6 +131,44 @@ def build_model(sp, device, config, attention_type, state_dict=None):
         model.initialise() 
     return model
 
+def load_model(model_path, device, model_type="vanilla"):
+        # Determine config path based on model type
+        config_paths = {
+            "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
+            "vanilla": "dl-from-scratch/papers/attention_is_all_you_need/config.yaml",
+            "rope": "dl-from-scratch/papers/RoPE/config.yaml"
+        }
+        
+        yaml_path = config_paths.get(model_type)
+        with open(yaml_path, "r") as file:
+            config = yaml.safe_load(file)
+        
+        if model_path is not None:
+            checkpoint = torch.load(model_path, map_location=device)
+        else:
+            checkpoint = {"model_state_dict": None, "optimiser_state_dict": None}
+        
+        # Parse model configuration from path/filename
+        config_parts = model_path.name.split("_")
+        if len(config_parts) == 7:
+            config['N_HEADS'] = int(config_parts[2])
+            config['D_MODEL'] = int(config_parts[3])
+            config['FF_HIDDEN'] = int(config_parts[4])
+            config['N_ENCODERS'] = int(config_parts[5])
+            config['N_DECODERS'] = int(config_parts[6])
+        elif len(config_parts) == 10:
+            config['N_HEADS'] = int(config_parts[2])
+            config['D_MODEL'] = int(config_parts[3])
+            config['FF_HIDDEN'] = int(config_parts[4])
+            config['N_ENCODERS'] = int(config_parts[5])
+            config['N_DECODERS'] = int(config_parts[6])
+            config['GLOBAL_ATTENTION'] = int(config_parts[7])
+            config['LOCAL_ATTENTION'] = int(config_parts[8])
+            config['RANDOM_ATTENTION'] = int(config_parts[9])
+
+        model = build_model(sp, device, config, model_type, 
+                          checkpoint.get('model_state_dict'))
+        return model, config, checkpoint
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
     underlying_model = model.module if hasattr(model, 'module') else model
@@ -303,22 +341,7 @@ if __name__ == "__main__":
     parser.add_argument("--attention_type", type=str, required=False, default="vanilla")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-    if args.llm_model_file != "":
-        checkpoint = torch.load(args.llm_model_file, map_location=torch.device(device))
-    else:
-        checkpoint = {'model_state_dict' : None, 'optimiser_state_dict' : None}
-
-    if args.attention_type == "sparse":
-        YAML_PATH = f"dl-from-scratch/papers/big_bird_attention/config.yaml"
-    elif args.attention_type == "vanilla":
-        YAML_PATH = f"dl-from-scratch/papers/attention_is_all_you_need/config.yaml"
-    elif args.attention_type == "rope":
-        YAML_PATH = f"dl-from-scratch/papers/RoPE/config.yaml"
-
-    with open(YAML_PATH, "r") as file:
-        config = yaml.safe_load(file)
-
+    model, config, checkpoint = load_model(args.llm_model_file, device, model_type=args.attention_type)
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
-    model = build_model(sp, device, config, args.attention_type, checkpoint['model_state_dict'])
     train(model,sp, train_dataloader, test_dataloader, device, args.warmup, config, args.attention_type, checkpoint['optimiser_state_dict'])
