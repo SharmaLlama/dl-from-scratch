@@ -16,8 +16,8 @@ from sacrebleu.metrics import BLEU
 import pandas as pd
 
 def extract_long_translations(
-        max_length: int,
         min_length: int,
+        max_length: int,
         sp,
     ) -> Dict[str, str]:
     
@@ -46,24 +46,24 @@ def extract_long_translations(
     walk_dataset(
         load_dataset("opus100", "en-hi"), nested_translation=True)
 
-    # walk_dataset(
-    #     load_dataset("cfilt/iitb-english-hindi"), nested_translation=True)
+    walk_dataset(
+        load_dataset("cfilt/iitb-english-hindi"), nested_translation=True)
 
-    # walk_dataset(
-    #     load_dataset("ai4bharat/samanantar", "hi"), nested_translation=False)
+    walk_dataset(
+        load_dataset("ai4bharat/samanantar", "hi"), nested_translation=False)
 
-    # ds_hi = load_dataset("PMIndiaData/PMIndiaSum", data_dir="hindi-english")
-    # ds_en = load_dataset("PMIndiaData/PMIndiaSum", data_dir="english-hindi")
-    # en_by_url = {}
-    # for _, split in ds_en.items():
-    #     for ex in split:
-    #         en_by_url[ex["source_url"]] = ex
+    ds_hi = load_dataset("PMIndiaData/PMIndiaSum", data_dir="hindi-english")
+    ds_en = load_dataset("PMIndiaData/PMIndiaSum", data_dir="english-hindi")
+    en_by_url = {}
+    for _, split in ds_en.items():
+        for ex in split:
+            en_by_url[ex["source_url"]] = ex
 
-    # for _, split in ds_hi.items():
-    #     for ex_hi in split:
-    #         eng_rec = en_by_url.get(ex_hi["target_url"])
-    #         if eng_rec:
-    #             maybe_add(eng_rec["text"], ex_hi["text"])
+    for _, split in ds_hi.items():
+        for ex_hi in split:
+            eng_rec = en_by_url.get(ex_hi["target_url"])
+            if eng_rec:
+                maybe_add(eng_rec["text"], ex_hi["text"])
 
     return results
 
