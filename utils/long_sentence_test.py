@@ -183,9 +183,13 @@ if __name__ == "__main__":
                         full_data = LanguageTranslationDataset(seq_length=max_len, src_encodings=tmp_eng, tgt_encodings=tmp_hindi, 
                                                             sos_token=sp.bos_id(), eos_token=sp.eos_id(), pad_token=sp.pad_id())
                         dataloader = DataLoader(full_data, batch_size=config['BATCH_SIZE'], shuffle=True, pin_memory=True, num_workers=4)
-                        bleu_score = get_bleu_score(model, dataloader, sp, device, config)
-                        result_models["model_name"].append(model_name)
-                        result_models[f"bleu_score_{binned}"].append(bleu_score)
-    
+                        try:
+                            bleu_score = get_bleu_score(model, dataloader, sp, device, config)
+                            result_models["model_name"].append(model_name)
+                            result_models[f"bleu_score_{binned}"].append(bleu_score)
+                        except Exception as e:
+                            print(f"Error processing {model_name} for bucket {binned}: {e}")
+                            result_models["model_name"].append(model_name)
+                            result_models[f"bleu_score_{binned}"].append(None)
     df = pd.DataFrame(result_models)
     df.to_csv(f"{args.output_csv}.csv", index=False)
