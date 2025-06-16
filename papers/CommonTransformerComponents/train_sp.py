@@ -139,7 +139,7 @@ def load_model(model_path, device, vocab_size, model_type="vanilla"):
         config_paths = {
             "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
             "vanilla": "dl-from-scratch/papers/attention_is_all_you_need/config.yaml",
-            "rope": "dl-from-scratch/papers/RoPE/config.yaml"
+            "rope":  "config.yaml", #"dl-from-scratch/papers/RoPE/config.yaml"
         }
         
         yaml_path = config_paths.get(model_type)

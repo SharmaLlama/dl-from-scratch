@@ -72,7 +72,7 @@ if __name__ == "__main__":
     static_dict = {"SEQ_LEN": 140, "BATCH_SIZE": 512, "TRAIN_RATIO": 0.999}
     dataloader, _ = get_dataloaders(sp, english_encoded, hindi_encoded, static_dict)
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
-    model_types = ["sparse", "rope"] #
+    model_types = ["rope", "sparse", "rope"] #
     base_path = Path(args.llm_folder_path)
     for model_type in model_types:
         model_type_path = base_path / model_type
@@ -81,6 +81,7 @@ if __name__ == "__main__":
                 model_file = config_dir / f"Model_{model_number[model_type]}"
                 if model_file.exists():
                     model_name = f"{model_type}_{config_dir.name}_Model_{model_number[model_type]}"
+                    print(f"Model: {config_dir.name}")
                     model, config, _ = load_model(model_file, device, sp.vocab_size(), model_type=model_type)
                     config['TRAIN_RATIO'] = 0.999
                     model.eval()
