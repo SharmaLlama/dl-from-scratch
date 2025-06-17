@@ -146,7 +146,7 @@ def load_model(model_path, device, vocab_size, model_type="vanilla"):
         with open(yaml_path, "r") as file:
             config = yaml.safe_load(file)
         
-        if model_path == "":
+        if model_path != "":
             checkpoint = torch.load(model_path, map_location=device)
         else:
             checkpoint = {"model_state_dict": None, "optimiser_state_dict": None}
