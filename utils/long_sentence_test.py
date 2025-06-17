@@ -94,7 +94,6 @@ def sample_by_length_buckets(sentences, sp, target_samples=6000):
         '750_1000': [],
         '1000_1500': [],
         '1500_2000': [],
-        '2000+': []
     }
     
     for i, length in enumerate(en_lengths):
@@ -114,9 +113,7 @@ def sample_by_length_buckets(sentences, sp, target_samples=6000):
             buckets['1000_1500'].append(i)
         elif 1500 <= length < 2000:
             buckets['1500_2000'].append(i)
-        else:
-            buckets['2000+'].append(i)
-    
+
     sampling_info = {}
     for bucket_name, indices in buckets.items():
         original_count = len(indices)
@@ -176,7 +173,7 @@ if __name__ == "__main__":
                     model, config, _ = load_model(model_file, device, sp.vocab_size(), model_type=model_type)
                     model.eval()
                     for binned, pairs in bucketed_sentences.items():
-                        if pairs == "2000+": 
+                        if binned == "2000+": 
                             continue
                         max_len = int(binned.split("_")[1])
                         tmp_eng, tmp_hindi = pairs[0], pairs[1]

@@ -86,7 +86,6 @@ class RoPEMultiHeadAttention(BaseMultiHeadAttention):
         # Call the attention pattern
         x, self.attention_scores, self.queries, self.keys = self.attention_pattern(
             query, key, value, mask=mask, return_attention=return_attention)
-        
         x = x.transpose(1,2).contiguous().view(batch_size, seq_length, -1)
         x = self.w_o(x)
         return x

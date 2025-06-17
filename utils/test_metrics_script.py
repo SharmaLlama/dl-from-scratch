@@ -69,7 +69,7 @@ if __name__ == "__main__":
     english_encoded, hindi_encoded, ref_sentences = get_encodings(args.dataset, args.model_file, skiprows=550_000,
                                                                   nrows=args.amount)
 
-    static_dict = {"SEQ_LEN": 140, "BATCH_SIZE": 64, "TRAIN_RATIO": 0.999}
+    static_dict = {"SEQ_LEN": 140, "BATCH_SIZE": 256, "TRAIN_RATIO": 0.999}
     dataloader, _ = get_dataloaders(sp, english_encoded, hindi_encoded, static_dict)
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
     model_types = ["rope", "sparse", "rope"] #
