@@ -72,7 +72,7 @@ if __name__ == "__main__":
     static_dict = {"SEQ_LEN": 140, "BATCH_SIZE": 256, "TRAIN_RATIO": 0.999}
     dataloader, _ = get_dataloaders(sp, english_encoded, hindi_encoded, static_dict)
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
-    model_types = ["rope", "sparse", "rope"] #
+    model_types = ["rope", "sparse"] #
     base_path = Path(args.llm_folder_path)
     for model_type in model_types:
         model_type_path = base_path / model_type
