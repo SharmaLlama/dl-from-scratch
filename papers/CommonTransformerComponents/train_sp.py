@@ -152,22 +152,23 @@ def load_model(model_path, device, vocab_size, model_type="vanilla"):
             checkpoint = {"model_state_dict": None, "optimiser_state_dict": None}
         
         # Parse model configuration from path/filename
-        config_parts = model_path.name.split("_")
-        if 7<= len(config_parts) <= 8:
-            config['N_HEADS'] = int(config_parts[2])
-            config['D_MODEL'] = int(config_parts[3])
-            config['FF_HIDDEN'] = int(config_parts[4])
-            config['N_ENCODERS'] = int(config_parts[5])
-            config['N_DECODERS'] = int(config_parts[6])
-        elif 10 <= len(config_parts) <= 11:
-            config['N_HEADS'] = int(config_parts[2])
-            config['D_MODEL'] = int(config_parts[3])
-            config['FF_HIDDEN'] = int(config_parts[4])
-            config['N_ENCODERS'] = int(config_parts[5])
-            config['N_DECODERS'] = int(config_parts[6])
-            config['GLOBAL_ATTENTION'] = int(config_parts[7])
-            config['LOCAL_ATTENTION'] = int(config_parts[8])
-            config['RANDOM_ATTENTION'] = int(config_parts[9])
+        if model_path != "":
+            config_parts = model_path.name.split("_")
+            if 7<= len(config_parts) <= 8:
+                config['N_HEADS'] = int(config_parts[2])
+                config['D_MODEL'] = int(config_parts[3])
+                config['FF_HIDDEN'] = int(config_parts[4])
+                config['N_ENCODERS'] = int(config_parts[5])
+                config['N_DECODERS'] = int(config_parts[6])
+            elif 10 <= len(config_parts) <= 11:
+                config['N_HEADS'] = int(config_parts[2])
+                config['D_MODEL'] = int(config_parts[3])
+                config['FF_HIDDEN'] = int(config_parts[4])
+                config['N_ENCODERS'] = int(config_parts[5])
+                config['N_DECODERS'] = int(config_parts[6])
+                config['GLOBAL_ATTENTION'] = int(config_parts[7])
+                config['LOCAL_ATTENTION'] = int(config_parts[8])
+                config['RANDOM_ATTENTION'] = int(config_parts[9])
 
         model = build_model(vocab_size, device, config, model_type, 
                           checkpoint.get('model_state_dict'))
@@ -344,7 +345,6 @@ if __name__ == "__main__":
     parser.add_argument("--attention_type", type=str, required=False, default="vanilla")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-    print(args.llm_model_file)
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
     model, config, checkpoint = load_model(args.llm_model_file, device, sp.vocab_size(), model_type=args.attention_type)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
