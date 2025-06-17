@@ -344,6 +344,7 @@ if __name__ == "__main__":
     parser.add_argument("--attention_type", type=str, required=False, default="vanilla")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
+    print(args.llm_model_file)
     english_encoded, hindi_encoded, sp = get_encodings(args.dataset, args.model_file)
     model, config, checkpoint = load_model(args.llm_model_file, device, sp.vocab_size(), model_type=args.attention_type)
     train_dataloader, test_dataloader = get_dataloaders(sp, english_encoded, hindi_encoded, config)
