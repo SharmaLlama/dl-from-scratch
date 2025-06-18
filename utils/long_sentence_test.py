@@ -184,6 +184,7 @@ if __name__ == "__main__":
                             bleu_score = get_bleu_score(model, dataloader, sp, device, config)
                             result_models["model_name"].append(model_name)
                             result_models[f"bleu_score_{binned}"].append(bleu_score)
+                            print(f"{model_name} for bucket {binned}: {bleu_score}")
                         except Exception as e:
                             print(f"Error processing {model_name} for bucket {binned}: {e}")
                             result_models["model_name"].append(model_name)
