@@ -159,9 +159,8 @@ if __name__ == "__main__":
               "bleu_score_750_1000" : [], "bleu_score_1000_1500" : [], "bleu_score_1500_2000" : []}
     
     model_number = {"sparse" : 400, "vanilla" : 250, "rope" : 350}
-    model_types = ["sparse", "vanilla", "rope"]
+    model_types = ["rope", "vanilla", "sparse"]
     base_path = Path(args.llm_folder_path)
-    
     for model_type in model_types:
         model_type_path = base_path / model_type
         for config_dir in model_type_path.iterdir():
