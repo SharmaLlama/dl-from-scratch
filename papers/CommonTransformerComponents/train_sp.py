@@ -98,6 +98,7 @@ def get_dataloaders(sp, english_encoded, tgt_encoded, config):
 
     return train_dataloader, test_dataloader
 
+
 def build_model(vocab_size, device, config, attention_type, state_dict=None):
     # Prepare kwargs for sparse attention if needed
     attention_kwargs = {}
@@ -108,14 +109,21 @@ def build_model(vocab_size, device, config, attention_type, state_dict=None):
             'random_tokens': config.get('SPARSE_RANDOM_TOKENS', 2)
         }
 
-    encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], 
-                                  config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'], 
-                                  attention_type=attention_type, **attention_kwargs)
-    decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], config['D_MODEL'] // config['N_HEADS'], 
-                                  config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], config['DROPOUT'],
-                                   attention_type=attention_type, **attention_kwargs)
-    src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'], sin_embedding=True if attention_type != "rope" else False)
-    tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], config['DROPOUT'], sin_embedding=True if attention_type != "rope" else False)
+    encoder_transformer = Encoder(config['N_ENCODERS'], config['N_HEADS'], config['D_MODEL'], 
+                                  config['D_MODEL'] // config['N_HEADS'], 
+                                  config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], 
+                                  config['DROPOUT'], attention_type=attention_type, **attention_kwargs)
+    
+    decoder_transformer = Decoder(config['N_DECODERS'], config['N_HEADS'], config['D_MODEL'], 
+                                  config['D_MODEL'] // config['N_HEADS'], 
+                                  config['D_MODEL'] // config['N_HEADS'], config['FF_HIDDEN'], 
+                                  config['DROPOUT'], attention_type=attention_type, **attention_kwargs)
+    
+    src_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], 
+                                         config['DROPOUT'], sin_embedding=True if attention_type != "rope" else False)
+    tgt_embeddings = PositionalEmbedding(vocab_size, config['D_MODEL'], config['SEQ_LEN'], 
+                                         config['DROPOUT'], sin_embedding=True if attention_type != "rope" else False)
+    
     projection = Projection(config['D_MODEL'], vocab_size)
     model = Transformer(encoder_transformer, decoder_transformer, src_embeddings, tgt_embeddings, projection).to(device)
     
@@ -124,55 +132,77 @@ def build_model(vocab_size, device, config, attention_type, state_dict=None):
     
     if state_dict is not None:
         if torch.cuda.device_count() > 1:
-            model.load_state_dict(state_dict)
+            model.load_state_dict(state_dict, strict=True)
         else: 
             state_dict = OrderedDict((k.replace("module.", ""), v) for k, v in state_dict.items())
-            model.load_state_dict(state_dict)
-    elif torch.cuda.device_count() > 1:
-        model.module.initialise()
-    else: 
-        model.initialise() 
+            model.load_state_dict(state_dict, strict=True)
+            
+        if config.get("INFERENCE_LEN") and config["INFERENCE_LEN"] != config["SEQ_LEN"]:
+            print(f"Updating sequence length from {config['SEQ_LEN']} to {config['INFERENCE_LEN']}")
+            actual_model = model.module if torch.cuda.device_count() > 1 else model
+            actual_model.src_embedding.update_max_seq_length(config["INFERENCE_LEN"])
+            actual_model.tgt_embedding.update_max_seq_length(config["INFERENCE_LEN"])
+            if attention_type == "rope":
+                for encoder_layer in actual_model.encoder.layers:
+                    if hasattr(encoder_layer.attention, 'rope'):
+                        encoder_layer.attention.rope.update_max_seq_len(config["INFERENCE_LEN"])
+                
+                for decoder_layer in actual_model.decoder.layers:
+                    if hasattr(decoder_layer.attention, 'rope'):
+                        decoder_layer.attention.rope.update_max_seq_len(config["INFERENCE_LEN"])
+                    if hasattr(decoder_layer.attention_2, 'rope'):
+                        decoder_layer.attention_2.rope.update_max_seq_len(config["INFERENCE_LEN"])
+    
+    else:
+        if torch.cuda.device_count() > 1:
+            model.module.initialise()
+        else: 
+            model.initialise()
+            
     return model
 
-def load_model(model_path, device, vocab_size, model_type="vanilla"):
-        # Determine config path based on model type
-        config_paths = {
-            "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
-            "vanilla": "dl-from-scratch/papers/attention_is_all_you_need/config.yaml",
-            "rope": "dl-from-scratch/papers/RoPE/config.yaml"
-        }
-        
-        yaml_path = config_paths.get(model_type)
-        with open(yaml_path, "r") as file:
-            config = yaml.safe_load(file)
-        
-        if model_path != "":
-            checkpoint = torch.load(model_path, map_location=device)
-        else:
-            checkpoint = {"model_state_dict": None, "optimiser_state_dict": None}
-        
-        # Parse model configuration from path/filename
-        if model_path != "":
-            config_parts = model_path.parent.name.split("_")
-            if 7<= len(config_parts) <= 8:
-                config['N_HEADS'] = int(config_parts[2])
-                config['D_MODEL'] = int(config_parts[3])
-                config['FF_HIDDEN'] = int(config_parts[4])
-                config['N_ENCODERS'] = int(config_parts[5])
-                config['N_DECODERS'] = int(config_parts[6])
-            elif 10 <= len(config_parts) <= 11:
-                config['N_HEADS'] = int(config_parts[2])
-                config['D_MODEL'] = int(config_parts[3])
-                config['FF_HIDDEN'] = int(config_parts[4])
-                config['N_ENCODERS'] = int(config_parts[5])
-                config['N_DECODERS'] = int(config_parts[6])
-                config['GLOBAL_ATTENTION'] = int(config_parts[7])
-                config['LOCAL_ATTENTION'] = int(config_parts[8])
-                config['RANDOM_ATTENTION'] = int(config_parts[9])
 
-        model = build_model(vocab_size, device, config, model_type, 
-                          checkpoint.get('model_state_dict'))
-        return model, config, checkpoint
+def load_model(model_path, device, vocab_size, inference_len=None, model_type="vanilla"):
+    config_paths = {
+        "sparse": "dl-from-scratch/papers/big_bird_attention/config.yaml",
+        "vanilla": "config.yaml",
+        "rope": "config.yaml",
+    }
+    
+    yaml_path = config_paths.get(model_type)
+    with open(yaml_path, "r") as file:
+        config = yaml.safe_load(file)
+        
+    if inference_len is not None:
+        config["INFERENCE_LEN"] = inference_len
+    
+    if model_path != "":
+        checkpoint = torch.load(model_path, map_location=device)
+    else:
+        checkpoint = {"model_state_dict": None, "optimiser_state_dict": None}
+    
+    # Parse model configuration from path/filename
+    if model_path != "":
+        config_parts = model_path.parent.name.split("_")
+        if 7<= len(config_parts) <= 8:
+            config['N_HEADS'] = int(config_parts[2])
+            config['D_MODEL'] = int(config_parts[3])
+            config['FF_HIDDEN'] = int(config_parts[4])
+            config['N_ENCODERS'] = int(config_parts[5])
+            config['N_DECODERS'] = int(config_parts[6])
+        elif 10 <= len(config_parts) <= 11:
+            config['N_HEADS'] = int(config_parts[2])
+            config['D_MODEL'] = int(config_parts[3])
+            config['FF_HIDDEN'] = int(config_parts[4])
+            config['N_ENCODERS'] = int(config_parts[5])
+            config['N_DECODERS'] = int(config_parts[6])
+            config['GLOBAL_ATTENTION'] = int(config_parts[7])
+            config['LOCAL_ATTENTION'] = int(config_parts[8])
+            config['RANDOM_ATTENTION'] = int(config_parts[9])
+
+    model = build_model(vocab_size, device, config, model_type, 
+                      checkpoint.get('model_state_dict'))
+    return model, config, checkpoint
 
 def model_prediction(model, batch, max_len, device, sos_token, eos_token, pad_token):
     underlying_model = model.module if hasattr(model, 'module') else model

@@ -64,6 +64,17 @@ class RotaryEmbedding(nn.Module):
         cos = cos.repeat_interleave(2, dim=-1)
         return sin, cos
 
+    def update_max_seq_len(self, new_max_seq_len):
+        """
+        Update the maximum sequence length and recreate the buffers.
+        """
+        if new_max_seq_len != self.max_seq_len:
+            self.max_seq_len = new_max_seq_len
+            device = self.sin.device
+            dtype = self.sin.dtype
+            sin, cos = self._build_sin_cos(new_max_seq_len, device=device, dtype=dtype)
+            self.register_buffer("sin", sin)
+            self.register_buffer("cos", cos)
 
     @staticmethod
     def _rotate_half(x: torch.Tensor) -> torch.Tensor:

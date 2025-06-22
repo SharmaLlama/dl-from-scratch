@@ -43,6 +43,16 @@ class PositionalEmbedding(nn.Module):
         )
         return positional_encoding
     
+    def update_max_seq_length(self, new_max_seq_length):
+        """
+        Update the maximum sequence length and recreate the buffer.
+        """
+        if new_max_seq_length != self.max_seq_length:
+            self.max_seq_length = new_max_seq_length
+            if self.sin_embedding:
+                new_encoding = self._create_positional_encoding(new_max_seq_length)
+                self.register_buffer("positional_encoding", new_encoding)
+
     def _get_positional_encoding(self, seq_length):
         if not self.sin_embedding:
             return 0
