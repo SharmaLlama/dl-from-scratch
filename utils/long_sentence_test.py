@@ -86,14 +86,14 @@ def sample_by_length_buckets(sentences, sp, target_samples=6000):
     
     # Create buckets with indices
     buckets = {
+        '1500_2000': [],
+        '1000_1500': [],
         '0_140': [],
         '140_200': [], 
         '200_300': [],
         '300_500': [],
         '500_750': [],
         '750_1000': [],
-        '1000_1500': [],
-        '1500_2000': [],
     }
     
     for i, length in enumerate(en_lengths):
@@ -185,8 +185,8 @@ if __name__ == "__main__":
                             result_models[f"bleu_score_{binned}"].append(bleu_score)
                             print(f"{model_name} for bucket {binned}: {bleu_score}")
                         except Exception as e:
-                            print(f"Error processing {model_name} for bucket {binned}: {e}")
                             result_models["model_name"].append(model_name)
                             result_models[f"bleu_score_{binned}"].append(None)
+                            raise ValueError(f"Error processing {model_name} for bucket {binned}: {e}")
     df = pd.DataFrame(result_models)
     df.to_csv(f"{args.output_csv}.csv", index=False)
