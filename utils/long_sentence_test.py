@@ -131,13 +131,12 @@ def sample_by_length_buckets(sentences, sp, target_samples=6000):
     
     return sampling_info
     
-def get_bleu_score(model, dataloader, sp, device, config):
+def get_bleu_score(model, dataloader, sp, device, max_seq_len=140):
     bleu = BLEU(tokenize="intl")
     full_decoded = []
     actual = []
-    inference_len = config.get('INFERENCE_LEN', config['SEQ_LEN'])
     for batch in dataloader:
-        pred = model_prediction(model, batch, inference_len, device, sp.bos_id(), sp.eos_id(), sp.pad_id())
+        pred = model_prediction(model, batch, max_seq_len, device, sp.bos_id(), sp.eos_id(), sp.pad_id())
         decoded = sp.decode(pred.detach().cpu().tolist())
         full_decoded.extend(remove_trailing_periods(decoded))
         actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
@@ -181,7 +180,7 @@ if __name__ == "__main__":
                                                             sos_token=sp.bos_id(), eos_token=sp.eos_id(), pad_token=sp.pad_id())
                         dataloader = DataLoader(full_data, batch_size=64, shuffle=True, pin_memory=True, num_workers=4)
                         try:
-                            bleu_score = get_bleu_score(model, dataloader, sp, device, config)
+                            bleu_score = get_bleu_score(model, dataloader, sp, device, max_len)
                             result_models["model_name"].append(model_name)
                             result_models[f"bleu_score_{binned}"].append(bleu_score)
                             print(f"{model_name} for bucket {binned}: {bleu_score}")
