@@ -135,8 +135,9 @@ def get_bleu_score(model, dataloader, sp, device, config):
     bleu = BLEU(tokenize="intl")
     full_decoded = []
     actual = []
+    inference_len = config.get('INFERENCE_LEN', config['SEQ_LEN'])
     for batch in dataloader:
-        pred = model_prediction(model, batch, config['SEQ_LEN'], device, sp.bos_id(), sp.eos_id(), sp.pad_id())
+        pred = model_prediction(model, batch, inference_len, device, sp.bos_id(), sp.eos_id(), sp.pad_id())
         decoded = sp.decode(pred.detach().cpu().tolist())
         full_decoded.extend(remove_trailing_periods(decoded))
         actual.extend(remove_trailing_periods(sp.Decode(batch['output'].detach().cpu().tolist())))
