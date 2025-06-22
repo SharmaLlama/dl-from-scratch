@@ -178,7 +178,7 @@ if __name__ == "__main__":
                         tmp_eng, tmp_hindi = pairs[0], pairs[1]
                         full_data = LanguageTranslationDataset(seq_length=max_len, src_encodings=tmp_eng, tgt_encodings=tmp_hindi, 
                                                             sos_token=sp.bos_id(), eos_token=sp.eos_id(), pad_token=sp.pad_id())
-                        dataloader = DataLoader(full_data, batch_size=64, shuffle=True, pin_memory=True, num_workers=4)
+                        dataloader = DataLoader(full_data, batch_size=128, pin_memory=True, num_workers=4)
                         try:
                             bleu_score = get_bleu_score(model, dataloader, sp, device, max_len)
                             result_models["model_name"].append(model_name)
