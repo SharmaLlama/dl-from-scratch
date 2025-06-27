@@ -86,14 +86,14 @@ def sample_by_length_buckets(sentences, sp, target_samples=6000):
     
     # Create buckets with indices
     buckets = {
-        '1500_2000': [],
-        '1000_1500': [],
         '0_140': [],
         '140_200': [], 
         '200_300': [],
         '300_500': [],
         '500_750': [],
         '750_1000': [],
+        '1000_1500': [],
+        '1500_2000': [],
     }
     
     for i, length in enumerate(en_lengths):
